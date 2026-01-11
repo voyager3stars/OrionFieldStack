@@ -2,7 +2,7 @@
 
 **OrionFieldStack** is an open-source project designed for astronomical observation and field computing automation, developed by **voyager3.stars**.
 
-Official Web: [voyager3](https://voyager3.xxx) (※ここに実際のURLを入れてください)
+Official Web: [voyager3.stars](https://voyager3.stars.ne.jp)
 
 ---
 
