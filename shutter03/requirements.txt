@@ -1,4 +1,0 @@
-requests
-exifread
-gpiozero
-lgpio

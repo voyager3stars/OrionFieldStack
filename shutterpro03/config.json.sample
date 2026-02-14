@@ -1,0 +1,26 @@
+{
+    "SYSTEM": {
+        "GPIO_SHUTTER": 27,
+        "FLASHAIR_URL": "http://192.168.50.200",
+        "SAVE_DIR": "~/Pictures",
+        "LOG_DEST": "s2save",
+        "DISPLAY_MODE": "full",
+        "INDI_MOUNT": "LX200 OnStep",
+        "INDI_WEATHER": "LX200 OnStep",
+        "PROP_COORD": "EQUATORIAL_EOD_COORD",
+        "PROP_GEO": "GEOGRAPHIC_COORD",
+        "PROP_WEATHER": "WEATHER_PARAMETERS"
+    },
+    "CONTEXT": {
+        "session": "def",
+        "objective": "Test Target",
+        "frame_type": "test"
+    },
+    "EQUIPMENT": {
+        "telescope": "Vixen R200SS",
+        "optics": "Telescope Corrector PH",
+        "camera": "PENTAX K-1 Mark II",
+        "focal_length_mm": 760,
+        "filter": "N/A"
+    }
+}
