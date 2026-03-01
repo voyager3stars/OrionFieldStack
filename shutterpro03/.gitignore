@@ -26,5 +26,9 @@ latest_shot.json
 shutter_history.json
 shutter_log.json
 
+# === ローカル（フォルダ内）用 git ===
+# ローカルのgitに使用しているフォルダ別git
+.git/
+
 # === Gitに「入れる」べきものはここには書かない ===
 # requirements.txt, config.json.sample, 各.pyファイル は管理対象
