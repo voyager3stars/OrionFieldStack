@@ -89,17 +89,84 @@ python3 shutterpro03.py 1 bulb 10 obj=M42 t=test
 本ツールが出力するログファイルは、OrionFieldStack 標準規格に準拠しています。
 
 * **Software Version**: v13.12.0
-* **JSON Log Spec**: [v1.3.2](./OFS_json_spec.md)
+* **JSON Log Spec**: [v1.4.2](./OFS_json_spec.md)
 
 ### Log Destination Policy
 \`log_dest\` オプションにより、保存先を制御可能です:
 * \`s2cur\`: スクリプトを実行した現在のディレクトリに保存。
 * \`s2save\`: 画像が保存されるディレクトリ（\`dir=\` で指定）に保存。
 
-
-
 ---
 
+## 📊 System schematic
+```mermaid
+graph TD
+    subgraph "Raspberry Pi (OrionFieldStack Core)"
+        SP03[<b>ShutterPro03</b><br/>Python Script]
+        CONF[(config.json)]
+        LOG[[JSON Log v1.3.2]]
+    end
+
+    subgraph "Physical Connection"
+        GPIO((GPIO Out))
+        CABLE[Shutter Cable<br/>Photo-Coupler Circuit]
+    end
+
+    subgraph "Imaging System"
+        K1[<b>Camera</b><br/>Pentax K-1 / Others]
+        FA[[FlashAir / SD Card]]
+    end
+
+    subgraph "Control Network (INDI)"
+        INDI_SVR{INDI Server}
+        MOUNT[Telescope Mount]
+        SENS[Weather/Env Sensors]
+    end
+
+    %% Flow of physical control
+    SP03 -->|1. Trigger| GPIO
+    GPIO --> CABLE
+    CABLE ---|Shutter Release| K1
+
+    %% Flow of data acquisition
+    SP03 <-->|Load/Override| CONF
+    SP03 <-->|2. Get Telemetry| INDI_SVR
+    INDI_SVR <-->|Coordinates| MOUNT
+    INDI_SVR <-->|Environment| SENS
+
+    %% Log generation
+    K1 -.->|3. Save Image| FA
+    SP03 -->|4. Generate| LOG
+    FA -.->|Reference Filename| LOG
+
+    %% Styling
+    style SP03 fill:#f9f,stroke:#333,stroke-width:2px
+    style K1 fill:#bbf,stroke:#333,stroke-width:2px
+    style INDI_SVR fill:#dfd,stroke:#333,stroke-dasharray: 5 5
+    style LOG fill:#fff,stroke:#f66,stroke-width:2px
+```
+
+---
+## 📂 Directory & File Structure
+
+```text
+~ (Home Directory)
+├── OrionFieldStack/        # 【プログラム層】
+│   ├── README.md
+│   ├── config.json         # 全体設定（接続先・パス・デフォルト値）
+│   ├── shutterpro03.py     # メイン制御（エントリーポイント）
+│   ├── sp03_utils.py       # 共通ユーティリティ（時間計算、パス変換等）
+│   ├── sp03_logger.py      # ログ生成エンジン
+│   ├── sp03_manual.md      # 詳細取扱説明書
+│   └── OFS_json_spec.md    # ログファイルの仕様書
+│
+└── Pictures/               # 【データ層】
+    ├── IMG_XXXX.dng        # 撮影された生画像
+    ├── latest_shot.json    # ツール間連携用リアルタイムバッファ
+    ├── shutter_log.json    # 累積詳細ログ (JSON)
+    └── shutter_log.csv     # 閲覧用累積ログ (CSV)
+```
+---
 ## 📋 Requirements
 
 * Python 3.x
@@ -113,3 +180,4 @@ python3 shutterpro03.py 1 bulb 10 obj=M42 t=test
 
 © 2026 OrionFieldStack Project.
 Created by @voyager3.stars.
+

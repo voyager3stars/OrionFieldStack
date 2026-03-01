@@ -3,7 +3,7 @@
 # Component:    ShutterPro03 Logger & Analyzer
 # Author:       voyager3.stars
 # Web:          https://voyager3.stars.ne.jp
-# Version:      13.12.0 (JSON Spec v1.3.2 Compliance)
+# Version:      14.1.1 (Refactored to use Pre-formatted Utils Data)
 # License:      MIT
 # Description:  Handles asynchronous image analysis and telemetry 
 #               logging. Extracts Exif metadata, merges it with 
@@ -23,15 +23,14 @@ from dataclasses import dataclass
 
 # Import project utilities
 import sp03_utils as utils
-
+    
 @dataclass
 class ShotRecord:
     """
     Data container representing a single capture event.
-    Passed from the Shutter engine to the Downloader and finally to the Analyzer.
     """
     timestamp_utc: str
-    timestamp_jst: str
+    timestamp_local: str
     elapsed_on_ms: float
     indi_data: dict
     shot_mode: str
@@ -41,106 +40,82 @@ class ShotRecord:
     file_format: str = ""
     file_size_mb: float = 0.0
 
-
 # ==============================================================================
 # Helper Functions: Exif Coordinate Conversion
 # ==============================================================================
 
 def _convert_gps(tags, key_coord, key_ref):
-    """
-    Converts Exif GPS rational format (degrees, minutes, seconds) to decimal degrees.
-    
-    Args:
-        tags (dict): Exif tags extracted by exifread.
-        key_coord (str): The Exif key for the coordinate (e.g., 'GPS GPSLatitude').
-        key_ref (str): The Exif key for the reference (e.g., 'GPS GPSLatitudeRef').
-    
-    Returns:
-        float: Decimal coordinate, or None if conversion fails.
-    """
     if key_coord not in tags: return None
     try:
         c = tags[key_coord]
-        # Convert rational values to float: (D/1) + (M/60) + (S/3600)
         val = (float(c.values[0].num)/c.values[0].den) + \
               (float(c.values[1].num)/c.values[1].den)/60 + \
               (float(c.values[2].num)/c.values[2].den)/3600
-        # Apply sign based on Reference (S and W are negative)
         if key_ref in tags and str(tags[key_ref].values) in ['S', 'W']: val = -val
         return val 
-    except: 
-        return None
+    except: return None
 
 def _get_altitude(tags):
-    """
-    Extracts and converts GPS Altitude from Exif tags.
-    """
     if "GPS GPSAltitude" not in tags: return None
     try:
         alt = tags["GPS GPSAltitude"].values[0]
         val = float(alt.num) / alt.den
         ref = tags.get("GPS GPSAltitudeRef")
-        # GPSAltitudeRef: 0 = Above Sea Level, 1 = Below Sea Level
         if ref and ref.values[0] == 1: val = -val
         return val
-    except: 
-        return None
+    except: return None
 
 
 # ==============================================================================
-# Main Worker: Analyzer (JSON v1.3.2 Orchestrator)
+# Main Worker: Analyzer (JSON v1.4.0 Compliance)
 # ==============================================================================
 
 def analyzer_worker(analysis_queue, stop_event, CONFIG):
     """
     Background worker that processes downloaded images.
-    1. Extracts Exif data (ISO, Exposure, GPS, Model).
-    2. Merges with INDI telemetry captured at the time of shutter pulse.
-    3. Writes a flat record to CSV for legacy compatibility.
-    4. Generates a structured JSON log adhering to Project Spec v1.3.2.
+    v14.1.0: Uses pre-formatted strings (_s) from utils for CSV and 
+             pre-converted numeric values for JSON.
     """
-    # Determine log destination based on config
     log_dir = os.getcwd() if CONFIG["LOG_DEST"] == "s2cur" else CONFIG["SAVE_DIR"]
     csv_file = os.path.join(log_dir, CONFIG["LOG_FILE_NAME"])
     latest_json_file = os.path.join(log_dir, CONFIG["LATEST_JSON_NAME"])
     history_json_file = os.path.join(log_dir, CONFIG["HISTORY_JSON_NAME"])
-    
-    # Define CSV Header (Structured for astronomical metadata)
-    header = ["UTC", "JST", "Actual_ON_sec", "Filename", "SavedDir", "Shot_Mode", "Format", "Size_MB", "Width_px", "Height_px", 
-              "ISO_Exif", "Exposure_Exif", "DateTime_Exif", "Lat_Exif", "Lon_Exif", "Alt_Exif", 
-              "Lat_INDI", "Lon_INDI", "Alt_INDI", "Exp_Diff_sec", "RA_INDI", "DEC_INDI", 
-              "Temp_Ext_C", "Humidity_pct", "Pressure_hPa", "DewPoint_C", "CPU_Temp_C"]
-    
-    # Initialize CSV if it doesn't exist
+
+    header = [
+            "Session_ID", "Objective", "Telescope", "Filter", "ISO_Timestamp", 
+            "Timestamp_UTC", "Unixtime", "Actual_Exp_sec", "Exp_Diff_sec", 
+            "Shot_Mode", "Frame_Type", "File_Name", "ISO", "Shutter_sec", 
+            "RA_deg", "Dec_deg", "RA_HMS", "Dec_DMS", "Mount_Status", 
+            "Side_Of_Pier", "Hour_Angle", "LST_HMS", "Lat_INDI", "Lon_INDI", 
+            "Alt_INDI", "Temp_Ext_C", "Humidity_pct", "Pressure_hPa", 
+            "DewPoint_C", "Mnt_CPU_Temp_C","RPi_CPU_Temp_C", "Solve_Status"
+        ]
+
     if not os.path.exists(csv_file):
         with open(csv_file, 'w', newline='', encoding='utf-8') as f:
+            f.write(f"# OrionFieldStack CSV Log Spec v{CONFIG['JSON_SPEC']}\n")
             csv.writer(f).writerow(header)
 
     while not (stop_event.is_set() and analysis_queue.empty()):
         try: 
-            # Non-blocking fetch from the analysis queue
             shot = analysis_queue.get(timeout=1)
         except queue.Empty: 
             continue
         
         local_path = shot.local_path
-        # Temporary storage for extracted Exif data
         ex = {"iso": None, "exp": None, "dt": "", "lat": None, "lon": None, "alt": None, "diff": 0.0, "w": 0, "h": 0, "model": ""}
         
-        # Brief pause to ensure OS file handles are settled
         time.sleep(1.0)
         
-        # --- EXIF Extraction Block (with retry logic) ---
+        # --- EXIF Extraction Block ---
         for attempt in range(5):
             try:
                 with open(local_path, 'rb') as f:
                     tags = exifread.process_file(f, details=True)
                 
-                # Identify Camera Model
                 if "Image Model" in tags: ex["model"] = str(tags["Image Model"])
                 elif "EXIF Model" in tags: ex["model"] = str(tags["EXIF Model"])
 
-                # Extract Image Dimensions (checking multiple standard Exif tags)
                 all_w, all_h = [], []
                 for t_name, t_val in tags.items():
                     if "ImageWidth" in t_name or "0x0100" in t_name:
@@ -151,7 +126,6 @@ def analyzer_worker(analysis_queue, stop_event, CONFIG):
                         except: pass
                 if all_w and all_h: ex["w"], ex["h"] = max(all_w), max(all_h)
                 
-                # Extract ISO and Exposure Time
                 iso = tags.get("EXIF ISOSpeedRatings") or tags.get("Image ISOSpeedRatings")
                 if iso: ex["iso"] = int(iso.values[0])
                 
@@ -160,74 +134,111 @@ def analyzer_worker(analysis_queue, stop_event, CONFIG):
                     v = exp.values[0]
                     exposure_val = float(v.num) / v.den if hasattr(v, 'num') else float(v)
                     ex["exp"] = exposure_val
-                    # Calculate latency: (GPIO pulse time) - (Internal Camera exposure)
                     ex["diff"] = (shot.elapsed_on_ms / 1000) - exposure_val
                 
                 dt = tags.get("EXIF DateTimeOriginal") or tags.get("Image DateTime")
                 if dt: ex["dt"] = str(dt.values)
                 
-                # Parse GPS data
                 ex["lat"] = _convert_gps(tags, "GPS GPSLatitude", "GPS GPSLatitudeRef")
                 ex["lon"] = _convert_gps(tags, "GPS GPSLongitude", "GPS GPSLongitudeRef")
                 ex["alt"] = _get_altitude(tags)
-                break # Success
-            except: 
-                pass
+                break
+            except: pass
             time.sleep(1)
         
         indi = shot.indi_data
         
-        # --- DATA ARCHIVING: 1. CSV (Flat format) ---
-        row = [shot.timestamp_utc, shot.timestamp_jst, f"{shot.elapsed_on_ms/1000:.6f}", shot.filename, CONFIG["SAVE_DIR"],
-               shot.shot_mode, shot.file_format, f"{shot.file_size_mb:.2f}", ex["w"], ex["h"], 
-               ex["iso"], f"{ex['exp']:.6f}" if ex['exp'] else "", ex["dt"], 
-               f"{ex['lat']:.6f}" if ex['lat'] else "", f"{ex['lon']:.6f}" if ex['lon'] else "", f"{ex['alt']:.2f}" if ex['alt'] else "", 
-               indi.get("lat"), indi.get("lon"), indi.get("alt"), f"{ex['diff']:.6f}", 
-               indi.get("ra"), indi.get("dec"), 
-               indi.get("weather_temp"), indi.get("weather_hum"), indi.get("weather_pres"), 
-               indi.get("weather_dew"), indi.get("cpu_temp")]
+        # --- DATA ARCHIVING: 1. CSV (利用: indi.get("xxx_s")) ---
+        # utils 側で生成された整形済み文字列 (_s) を使用することで、安全かつ綺麗な表示を実現
+        row = [
+            CONFIG["CONTEXT"]["session"],           # Session_ID
+            CONFIG["CONTEXT"]["objective"],         # Objective
+            CONFIG["EQUIPMENT"]["telescope"],       # Telescope
+            CONFIG["EQUIPMENT"]["filter"],          # Filter
+            shot.timestamp_local,                   # ISO_Timestamp
+            shot.timestamp_utc,                     # Timestamp_UTC
+            f"{shot.dt_object.timestamp():.3f}",    # Unixtime (Excel配慮で3桁)
+            f"{shot.elapsed_on_ms/1000:.3f}",       # Actual_Exp_sec
+            f"{ex['diff']:.3f}",                    # Exp_Diff_sec
+            shot.shot_mode,                         # Shot_Mode
+            CONFIG["CONTEXT"].get("frame_type", "test"), # Frame_Type
+            shot.filename,                          # File_Name
+            ex["iso"],                              # ISO
+            f"{ex['exp']:.3f}" if ex['exp'] is not None else "", # Shutter_sec
+            
+            # --- INDIデータ (整形済み文字列を選択) ---
+            indi.get("ra_deg_s"),                   # RA_deg
+            indi.get("dec_deg_s"),                  # Dec_deg
+            indi.get("ra_hms"),                     # RA_HMS
+            indi.get("dec_dms"),                    # Dec_DMS
+            indi.get("status"),                     # Mount_Status
+            indi.get("side_of_pier"),                # Side_Of_Pier
+            indi.get("hour_angle_s"),               # Hour_Angle
+            indi.get("lst_hms"),                    # LST_HMS
+            indi.get("latitude_s"),                 # Lat_INDI
+            indi.get("longitude_s"),                # Lon_INDI
+            indi.get("elevation_s"),                # Alt_INDI
+            indi.get("weather_temp_s"),              # Temp_Ext_C
+            indi.get("weather_humi_s"),              # Humidity_pct
+            indi.get("weather_pres_s"),              # Pressure_hPa
+            indi.get("weather_dew_s"),               # DewPoint_C
+            indi.get("cpu_temp_mount_s"),           # INDI mountCPU temp
+            indi.get("cpu_temp_rpi_s"),             # Raspberry Pi CPU temp
+            
+            "pending"                               # Solve_Status
+        ]
         
         with open(csv_file, 'a', newline='', encoding='utf-8') as f:
             csv.writer(f).writerow(row)
             f.flush(); os.fsync(f.fileno())
-        
-        # --- DATA ARCHIVING: 2. JSON (Spec v1.3.2 Strict Implementation) ---
-        def to_float_or_none(val):
-            try: return float(val)
-            except: return None
-        
+            
+        # --- DATA ARCHIVING: 2. JSON (利用: indi.get("xxx") の生数値) ---
+        f_number, pixel_scale = utils.calculate_equipment_specs(CONFIG["EQUIPMENT"])
+        exp_actual = shot.elapsed_on_ms / 1000.0
+        exp_exif = float(ex["exp"]) if ex["exp"] else exp_actual
+        exposure_diff = round(exp_actual - exp_exif, 6)
         camera_model = ex["model"] if ex["model"] else CONFIG["EQUIPMENT"]["camera"]
-
+        
         json_data = {
             "version": CONFIG["JSON_SPEC"],
-            
             "session_id": CONFIG["CONTEXT"]["session"],
             "objective": CONFIG["CONTEXT"]["objective"],
-            "equipment": CONFIG["EQUIPMENT"],
+            "equipment": {
+                "telescope": CONFIG["EQUIPMENT"].get("telescope"),
+                "optics": CONFIG["EQUIPMENT"].get("optics"),
+                "filter": CONFIG["EQUIPMENT"].get("filter"),
+                "camera": CONFIG["EQUIPMENT"].get("camera"),
+                "aperture_mm": CONFIG["EQUIPMENT"].get("aperture_mm"),
+                "focal_length_mm": CONFIG["EQUIPMENT"].get("focal_length_mm"),
+                "f_number": f_number,
+                "pixel_size_um": CONFIG["EQUIPMENT"].get("pixel_size_um"),
+                "pixel_scale": pixel_scale
+            },
             "record": {
                 "meta": {
-                    "timestamp_jst": shot.timestamp_jst + "+09:00",
-                    "timestamp_utc": shot.timestamp_utc + "Z",
-                    "unixtime": shot.dt_object.timestamp(),
-                    "exposure_actual_sec": round(shot.elapsed_on_ms/1000.0, 3),
+                    "iso_timestamp": shot.timestamp_local,
+                    "timestamp_utc": shot.timestamp_utc,
+                    "utc_offset": indi.get("utc_offset", "+09:00"),
+                    "lst_hms": indi.get("lst_hms", "00:00:00"),
+                    "unixtime": round(shot.dt_object.timestamp(), 3),
+                    "exposure_actual_sec": round(exp_actual, 3),
+                    "exposure_diff_sec": exposure_diff,
                     "shot_mode": shot.shot_mode,
-                    "frame_type": CONFIG["CONTEXT"]["frame_type"]
+                    "frame_type": CONFIG["CONTEXT"].get("frame_type", "test")
                 },
                 "file": {
                     "name": shot.filename,
                     "path": CONFIG["SAVE_DIR"],
                     "format": shot.file_format,
                     "size_mb": round(shot.file_size_mb, 2),
-                    "width": int(ex["w"]) if ex["w"] else None,
-                    "height": int(ex["h"]) if ex["h"] else None
+                    "width": ex["w"], "height": ex["h"]
                 },
                 "exif": {
                     "iso": ex["iso"],
-                    "shutter_sec": float(ex["exp"]) if ex["exp"] else round(shot.elapsed_on_ms/1000.0, 3),
+                    "shutter_sec": round(exp_exif, 3),
+                    "datetime_original": ex["dt"],
                     "model": camera_model,
-                    "lat": ex["lat"],
-                    "lon": ex["lon"],
-                    "alt": ex["alt"]
+                    "lat": ex["lat"], "lon": ex["lon"], "alt": ex["alt"]
                 },
                 "mount": {
                     "ra_deg": indi.get("ra_deg"),
@@ -235,39 +246,41 @@ def analyzer_worker(analysis_queue, stop_event, CONFIG):
                     "ra_hms": indi.get("ra_hms"),
                     "dec_dms": indi.get("dec_dms"),
                     "status": indi.get("status", "Unknown"),
-                    "side_of_pier": indi.get("side_of_pier", "Unknown")
+                    "side_of_pier": indi.get("side_of_pier", "Unknown"),
+                    "hour_angle": indi.get("hour_angle")
                 },
                 "location": {
-                    "lat": to_float_or_none(indi.get("lat")),
-                    "lon": to_float_or_none(indi.get("lon")),
-                    "alt": to_float_or_none(indi.get("alt"))
+                    "site_name": indi.get("site_name"),
+                    "latitude": indi.get("latitude"),
+                    "longitude": indi.get("longitude"),
+                    "elevation": indi.get("elevation"),
+                    "timezone": indi.get("timezone"),
+                    "utc_offset": indi.get("utc_offset"),
+                    "tz_source": indi.get("tz_source")
                 },
                 "environment": {
-                    "temp_c": to_float_or_none(indi.get("weather_temp")),
-                    "humidity_pct": to_float_or_none(indi.get("weather_hum")),
-                    "pressure_hPa": to_float_or_none(indi.get("weather_pres")),
-                    "cpu_temp_c": to_float_or_none(indi.get("cpu_temp"))
+                    # utils側ですでに数値化されているため、to_float_or_none は不要に
+                    "temp_c": indi.get("weather_temp"),
+                    "humidity_pct": indi.get("weather_humi"),
+                    "pressure_hPa": indi.get("weather_pres"),
+                    "dew_point_c": indi.get("weather_dew"),
+                    "cpu_temp_mount_c": indi.get("cpu_temp_mount"),
+                    "cpu_temp_rpi_c": indi.get("cpu_temp_rpi")
                 },
                 "analysis": {
-                    # Placeholder for future Plate-Solving integration
                     "solve_status": "pending",
                     "solved_coords": None,
                     "quality": {
-                        "hfr": None,
-                        "stars": None,
-                        "elongation": None,
-                        "satellite_detected": False,
-                        "sky_brightness": None
+                        "hfr": None, "stars": None, "elongation": None, 
+                        "satellite_detected": False, "sky_brightness": None
                     }
                 }
             }
         }
 
-        # Save the single latest shot metadata
         with open(latest_json_file, 'w', encoding='utf-8') as f:
             json.dump(json_data, f, indent=4, ensure_ascii=False)
         
-        # Update the cumulative history log
         h = []
         if os.path.exists(history_json_file):
             try:
@@ -277,9 +290,6 @@ def analyzer_worker(analysis_queue, stop_event, CONFIG):
         with open(history_json_file, 'w', encoding='utf-8') as f:
             json.dump(h, f, indent=4, ensure_ascii=False)
         
-        # User notification
-        log_msg = f" SP03>> [Logged]: {shot.filename} (Software v{CONFIG['VERSION']} / JSON Spec v{CONFIG['JSON_SPEC']})"
+        log_msg = f" [Logged]: {shot.filename} (v{CONFIG['VERSION']} / Spec v{CONFIG['JSON_SPEC']})"
         utils.sp_print(log_msg, CONFIG, level="simple")
-        
-        
         analysis_queue.task_done()

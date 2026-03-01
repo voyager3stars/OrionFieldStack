@@ -9,18 +9,24 @@
         "INDI_WEATHER": "LX200 OnStep",
         "PROP_COORD": "EQUATORIAL_EOD_COORD",
         "PROP_GEO": "GEOGRAPHIC_COORD",
-        "PROP_WEATHER": "WEATHER_PARAMETERS"
+        "PROP_WEATHER": "WEATHER_PARAMETERS",
+        "DEFAULT_SITE_NAME": "Akashi Municipal Planetarium (JST Meridian)",
+        "LAST_LATITUDE": 34.6493,
+        "LAST_LONGITUDE": 135.0015,
+        "LAST_ELEVATION": 54.0
     },
     "CONTEXT": {
         "session": "def",
         "objective": "Test Target",
-        "frame_type": "test"
+        "frame_type": "Test"
     },
     "EQUIPMENT": {
         "telescope": "Vixen R200SS",
         "optics": "Telescope Corrector PH",
         "camera": "PENTAX K-1 Mark II",
         "focal_length_mm": 760,
+        "aperture_mm": 200,
+        "pixel_size_um": 4.88,
         "filter": "N/A"
     }
 }
