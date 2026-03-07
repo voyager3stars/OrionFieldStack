@@ -26,7 +26,5 @@ latest_shot.json
 shutter_history.json
 shutter_log.json
 
-
-
 # === Gitに「入れる」べきものはここには書かない ===
 # requirements.txt, config.json.sample, 各.pyファイル は管理対象
