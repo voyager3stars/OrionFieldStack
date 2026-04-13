@@ -2,7 +2,7 @@
 # =================================================================
 # Project:      OrionFieldStack
 # Component:    SkySolverEngine (SSE)
-# Version:      2.0.3
+# Version:      2.1.0
 # Author:       OrionFieldStack Dev Team
 # Description:  
 #   v2.0.2:
@@ -10,8 +10,8 @@
 #   - ポスト処理中の latest_shot.json 汚染を防止。
 # =================================================================
 
-__version__ = "2.0.3"
-__json_spec__ = "1.4.1"
+__version__ = "2.2.0"
+__json_spec__ = "1.6.0"
 
 import os
 import sys
@@ -25,6 +25,9 @@ import datetime
 import rawpy
 import imageio
 import math
+import io
+import tempfile
+import shutil
 
 class SkySolverEngine:
     def __init__(self, workdir="/tmp/skysolver", all_sky_enabled=False, force_mode=False):
@@ -161,20 +164,35 @@ class SkySolverEngine:
         if os.path.exists(csv_path): self._update_csv_file(csv_path, img_name, res)
 
     def _update_json_file(self, filepath, target_filename, res):
+        temp_fd, temp_path = tempfile.mkstemp(dir=os.path.dirname(filepath), prefix="sse_tmp_", suffix=".json")
         try:
-            with open(filepath, 'r+', encoding='utf-8') as f:
+            updated = False
+            with open(filepath, 'r', encoding='utf-8') as f:
                 data = json.load(f)
-                updated = False
                 for entry in data:
-                    if entry["record"]["file"]["name"] in target_filename:
+                    # check if name matches or is part of target
+                    name = entry.get("record", {}).get("file", {}).get("name", "")
+                    if name and (name == target_filename or name in target_filename):
                         self._apply_res_to_dict(entry, res)
                         updated = True
-                if updated:
-                    f.seek(0); json.dump(data, f, indent=4, ensure_ascii=False); f.truncate()
-        except Exception as e: print(f"  [Warning] JSON Update Failed: {e}")
+            
+            if updated:
+                with os.fdopen(temp_fd, 'w', encoding='utf-8') as tmp:
+                    json.dump(data, tmp, indent=4, ensure_ascii=False)
+                os.replace(temp_path, filepath)
+            else:
+                os.close(temp_fd)
+                if os.path.exists(temp_path): os.remove(temp_path)
+        except Exception as e:
+            if 'temp_path' in locals() and os.path.exists(temp_path): 
+                try: os.close(temp_fd)
+                except: pass
+                os.remove(temp_path)
+            print(f"  [Warning] JSON Update Failed: {e}")
 
     def _apply_res_to_dict(self, target_dict, res):
-        new_analysis = {
+        target_dict["record"].setdefault("analysis", {})
+        sse_data = {
             "solve_status": "success" if res["success"] else "failed",
             "solve_path": res.get("solve_path", "N/A"),
             "sse_version": __version__,
@@ -182,47 +200,82 @@ class SkySolverEngine:
             "confidence": res.get("confidence", 0.0)
         }
         if res["success"]:
-            new_analysis["solved_coords"] = {
+            sse_data["solved_coords"] = {
                 "ra_deg": res["ra"], "dec_deg": res["dec"], "orientation": res.get("orientation"),
                 "ra_hms": self.deg_to_hms(res["ra"]), "dec_dms": self.deg_to_dms(res["dec"])
             }
-            new_analysis["process_stats"] = {
+            sse_data["process_stats"] = {
                 "matched_stars": res.get("stars"),
                 "solve_duration_sec": res.get("duration", 0.0)
             }
-            new_analysis["quality"] = {"hfr": None, "elongation": None}
-        target_dict["record"]["analysis"] = new_analysis
+        target_dict["record"]["analysis"]["SSE"] = sse_data
 
     def _update_csv_file(self, filepath, target_filename, res):
+        """Streaming update for CSV."""
+        temp_fd, temp_path = tempfile.mkstemp(dir=os.path.dirname(filepath), prefix="sse_tmp_", suffix=".csv")
         try:
-            rows = []; fieldnames = []; header_comment = ""
-            if os.path.exists(filepath):
-                with open(filepath, 'r', encoding='utf-8') as f:
-                    first_line = f.readline()
-                    if first_line.startswith("#"): header_comment = first_line
-                    else: f.seek(0)
-                    reader = csv.DictReader(f); fieldnames = list(reader.fieldnames) if reader.fieldnames else []; rows = list(reader)
-            if not fieldnames: return
-            new_cols = ["Solve_Status", "Solve_Confidence", "Matched_Stars", "Solve_Time_sec", "Solve_Path", "Solve_Orientation", "Solve_RA", "Solve_DEC", "SSE_Version"]
-            for col in new_cols:
-                if col not in fieldnames: fieldnames.append(col)
-            updated_any = False
-            for row in rows:
-                csv_filename = row.get("File_Name", "")
-                if csv_filename and (csv_filename == target_filename or csv_filename in target_filename):
-                    row["Solve_Status"] = "success" if res["success"] else "failed"
-                    row["Solve_Path"] = res.get("solve_path", "N/A")
-                    row["Solve_Time_sec"] = str(res.get("duration", 0.0))
-                    row["Solve_Confidence"] = f"{res.get('confidence', 0.0):.2f}"
-                    row["SSE_Version"] = __version__
-                    if res["success"]:
-                        row["Solve_RA"] = f"{res['ra']:.8f}"; row["Solve_DEC"] = f"{res['dec']:.8f}"
-                        row["Matched_Stars"] = str(res.get("stars", "")); row["Solve_Orientation"] = f"{res.get('orientation', 0.0):.2f}"
-                    updated_any = True
-            with open(filepath, 'w', encoding='utf-8', newline='') as f:
-                if header_comment: f.write(header_comment)
-                writer = csv.DictWriter(f, fieldnames=fieldnames); writer.writeheader(); writer.writerows(rows)
-        except Exception as e: print(f"  [Error] CSV Update Failed: {e}")
+            seen_comments = set()
+            new_cols = ["Solve_Status", "Solve_Confidence", "Matched_Stars", "Solve_Time_sec", "Solve_Path", "Solve_Orientation", "Solve_RA", "Solve_DEC", "Solve_RA_hms", "Solve_DEC_hms", "SSE_Version", "Solve_Timestamp"]
+            
+            with open(filepath, 'r', encoding='utf-8-sig', newline='') as f_in, \
+                 os.fdopen(temp_fd, 'w', encoding='utf-8-sig', newline='') as f_out:
+                
+                header_line = None
+                while True:
+                    line = f_in.readline()
+                    if not line:
+                        break
+                    if line.strip().startswith("#"):
+                        clean_line = line.strip()
+                        if clean_line not in seen_comments:
+                            f_out.write(line)
+                            seen_comments.add(clean_line)
+                    else:
+                        header_line = line
+                        break
+                
+                if not header_line:
+                    f_out.flush()
+                    os.replace(temp_path, filepath)
+                    return
+
+                reader = csv.DictReader([header_line])
+                fieldnames = list(reader.fieldnames) if reader.fieldnames else []
+                fieldnames = [f for f in fieldnames if f] 
+                
+                for col in new_cols:
+                    if col not in fieldnames: fieldnames.append(col)
+                
+                writer = csv.DictWriter(f_out, fieldnames=fieldnames, extrasaction='ignore')
+                writer.writeheader()
+                
+                actual_reader = csv.DictReader(f_in, fieldnames=reader.fieldnames)
+                for row in actual_reader:
+                    csv_filename = row.get("File_Name", row.get("Filename", ""))
+                    if csv_filename and (csv_filename == target_filename or csv_filename in target_filename):
+                        row["Solve_Status"] = "success" if res["success"] else "failed"
+                        row["Solve_Path"] = res.get("solve_path", "N/A")
+                        row["Solve_Time_sec"] = str(res.get("duration", 0.0))
+                        row["Solve_Confidence"] = f"{res.get('confidence', 0.0):.2f}"
+                        row["SSE_Version"] = __version__
+                        row["Solve_Timestamp"] = res.get("timestamp", "")
+                        if res["success"]:
+                            row["Solve_RA"] = f"{res['ra']:.8f}"
+                            row["Solve_DEC"] = f"{res['dec']:.8f}"
+                            row["Solve_RA_hms"] = self.deg_to_hms(res['ra'])
+                            row["Solve_DEC_hms"] = self.deg_to_dms(res['dec'])
+                            row["Matched_Stars"] = str(res.get("stars", ""))
+                            orient = res.get("orientation")
+                            row["Solve_Orientation"] = f"{orient:.2f}" if orient is not None else "0.00"
+                    writer.writerow(row)
+            
+            os.replace(temp_path, filepath)
+        except Exception as e:
+            if 'temp_path' in locals() and os.path.exists(temp_path):
+                try: os.close(temp_fd)
+                except: pass
+                os.remove(temp_path)
+            print(f"  [Error] CSV Update Failed: {e}")
 
     def process_target(self, target_path):
         target_name = os.path.basename(target_path)
@@ -233,7 +286,8 @@ class SkySolverEngine:
                 with open(log_path, 'r', encoding='utf-8') as f:
                     for r in json.load(f):
                         if r["record"]["file"]["name"] in target_name:
-                            is_solved = r["record"].get("analysis", {}).get("solve_status") == "success"
+                            analysis = r["record"].get("analysis", {})
+                            is_solved = analysis.get("SSE", {}).get("solve_status") == "success" or analysis.get("solve_status") == "success"
                             ra_hint = r["record"]["mount"].get("ra_deg")
                             dec_hint = r["record"]["mount"].get("dec_deg"); break
             except: pass

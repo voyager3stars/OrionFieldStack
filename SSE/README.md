@@ -1,4 +1,4 @@
-# SkySolverEngine (SSE) v2.0.2
+# SkySolverEngine (SSE) v2.1.0
 
 **High-Speed Plate Solving & Log Enricher**
 
@@ -67,7 +67,7 @@ python3 SSE.py [モード] [解析対象のパス] [追加オプション]
 ### Mode 1: Latest (最新ショットの解析)
 最新の `latest_shot.json` を参照し、座標ヒント(RA/Dec)を用いて高速解析を行います。
 ```bash
-python3 SSE01_V1_7_1.py latest ~/Pictures/
+python3 SSE.py latest ~/Pictures/
 ```
 
 ### Mode 2: Select (一括・個別解析)
@@ -75,7 +75,7 @@ python3 SSE01_V1_7_1.py latest ~/Pictures/
 
 ```bash
 # フォルダ内の未解析分を自動スキップしながら一括処理
-python3 SSE01_V1_7_1.py select ~/Pictures/M42_Project/
+python3 SSE.py select ~/Pictures/M42_Project/
 ```
 
 ## 3. オプション機能
