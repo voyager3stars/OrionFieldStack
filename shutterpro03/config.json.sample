@@ -18,7 +18,7 @@
     "CONTEXT": {
         "session": "def",
         "objective": "Test Target",
-        "frame_type": "Test"
+        "frame_type": "test"
     },
     "EQUIPMENT": {
         "telescope": "Vixen R200SS",

@@ -93,7 +93,7 @@ $$
 ### 3. sp03_logger.py (Data Architect)
 「データの信頼性」を担保する最重要モジュールです。
 
-* JSON Spec v1.3.2: 撮影データ、マウント座標、機材情報を統合し、厳格なスキーマで  shutter_log.json を生成します。
+* JSON Spec v1.5.0: 撮影データ、マウント座標、機材情報を統合し、厳格なスキーマで shutter_log.json を生成します。
 
 * Auto-Recovery: 書き込み中の電源断などでログが破損するのを防ぐ安全なファイル操作を担当。
 
