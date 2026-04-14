@@ -1,0 +1,8 @@
+{
+    "SYSTEM": {
+        "MASTER_JSON": "./shutter_log.json",
+        "EDIT_CSV": "./shutter_log.csv",
+        "BACKUP_DIR": "./backups",
+        "LOG_VERSION": "1.6.0"
+    }
+}
