@@ -1,0 +1,6 @@
+rawpy
+astropy
+photutils
+numpy
+scipy
+imageio

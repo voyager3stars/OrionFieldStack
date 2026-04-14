@@ -1,0 +1,8 @@
+# StarFlux / OrionFieldStack
+venv/
+.venv/
+__pycache__/
+*.pyc
+*.json
+!requirements.txt
+!README.md
