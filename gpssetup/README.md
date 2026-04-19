@@ -20,6 +20,6 @@ This script provides an automated environment setup for high-precision time sync
 
 ```bash
 git clone [https://github.com/voyager3stars/OrionFieldStack.git](https://github.com/voyager3stars/OrionFieldStack.git)
-cd OrionFieldStack
+cd OrionFieldStack/gpssetup
 chmod +x gpssetup.sh
 sudo ./gpssetup.sh
