@@ -9,7 +9,39 @@ from sf_loader import load_image
 from sf_align import register_images
 from sf_stack import stack_images, save_stacked_fits
 
-__version__ = "1.1.0"
+__version__ = "1.2.0"
+
+def apply_flat(img_data, flat_data, color):
+    """
+    Applies flat field correction to an image.
+    img_data and flat_data should be numpy arrays of the same shape.
+    """
+    # Resize or crop flat_data if shapes don't exactly match (simple check)
+    if img_data.shape != flat_data.shape:
+        print("  [Warning] Flat image shape does not match Light image. Shape mismatch could cause errors.")
+
+    if color and img_data.ndim == 3:
+        # Normalize per channel
+        flat_normalized = np.zeros_like(flat_data)
+        for c in range(img_data.shape[-1]):
+            median_val = np.median(flat_data[..., c])
+            if median_val > 0:
+                flat_normalized[..., c] = flat_data[..., c] / median_val
+            else:
+                flat_normalized[..., c] = 1.0
+    else:
+        # Monochrome or global normalization
+        median_val = np.median(flat_data)
+        if median_val > 0:
+            flat_normalized = flat_data / median_val
+        else:
+            flat_normalized = np.ones_like(flat_data)
+            
+    # Apply correction: Light / Normalized_Flat
+    # Avoid zero division
+    flat_safe = np.maximum(flat_normalized, 1e-5)
+    corrected = img_data / flat_safe
+    return corrected.astype(np.float32)
 
 def get_best_frame(valid_files, metadata_map, criteria='sf_ell_med'):
     """
@@ -26,7 +58,17 @@ def get_best_frame(valid_files, metadata_map, criteria='sf_ell_med'):
             continue
             
         try:
-            q = entry.get("record", {}).get("analysis", {}).get("quality", {})
+            # Check v1.6.0 top-level analysis first, fallback to older structure
+            analysis = entry.get("analysis")
+            if not analysis:
+                analysis = entry.get("record", {}).get("analysis", {})
+            
+            # Support v1.6.0+ structure (analysis -> SF -> quality)
+            q = analysis.get("SF", {}).get("quality")
+            if q is None:
+                # Support older structure (analysis -> quality)
+                q = analysis.get("quality", {})
+            
             val = q.get(criteria)
             if val is not None and val < min_val:
                 min_val = val
@@ -113,7 +155,17 @@ def filter_by_quality(valid_files, metadata_map, criteria='sf_ell_med', threshol
         if not entry:
             continue
         try:
-            q = entry.get("record", {}).get("analysis", {}).get("quality", {})
+            # Check v1.6.0 top-level analysis first, fallback to older structure
+            analysis = entry.get("analysis")
+            if not analysis:
+                analysis = entry.get("record", {}).get("analysis", {})
+            
+            # Support v1.6.0+ structure (analysis -> SF -> quality)
+            q = analysis.get("SF", {}).get("quality")
+            if q is None:
+                # Support older structure (analysis -> quality)
+                q = analysis.get("quality", {})
+                
             val = q.get(criteria)
             if val is not None and val <= threshold:
                 passed.append(f_path)
@@ -131,6 +183,8 @@ def main():
     parser.add_argument("--method", choices=['median', 'mean', 'sigma_clip'], default='sigma_clip', help="Stacking method")
     parser.add_argument("--out", default="master_stacked.fits", help="Output filename")
     parser.add_argument("--limit", type=int, help="Limit number of frames to stack")
+    parser.add_argument("--flat_dir", default=None, help="Directory containing flat images and their shutter_log.json")
+    parser.add_argument("--flat_session", default=None, help="Force a specific session ID for flats (overrides automatic matching)")
     args = parser.parse_args()
 
     mode_str = "COLOR" if args.color else "MONO"
@@ -167,13 +221,67 @@ def main():
         print("[Error] No frames passed the filter. Try a looser threshold.")
         sys.exit(1)
         
-    # 4. Load & Pre-process images
+    # 4. Load & Pre-process flats if requested
+    flat_map = {}
+    if args.flat_dir:
+        flat_log_path = os.path.join(args.flat_dir, "shutter_log.json")
+        if os.path.exists(flat_log_path):
+            print(f"  [Flats] Loading flat metadata from {flat_log_path}...")
+            try:
+                with open(flat_log_path, 'r', encoding='utf-8') as f:
+                    f_log = json.load(f)
+                    for entry in f_log:
+                        if "record" in entry and "file" in entry["record"]:
+                            s_id = entry.get("session_id")
+                            f_name = entry["record"]["file"]["name"]
+                            f_path = os.path.abspath(os.path.join(args.flat_dir, f_name))
+                            if s_id and s_id not in flat_map and os.path.exists(f_path):
+                                flat_map[s_id] = f_path
+                print(f"  [Flats] Found flats for {len(flat_map)} sessions.")
+            except Exception as e:
+                print(f"  [Warning] Failed to read flat log: {e}")
+        else:
+            print(f"  [Warning] No shutter_log.json found in {args.flat_dir}")
+
+    flat_cache = {}
+    
+    def get_and_apply_flat(img, path):
+        if not args.flat_dir:
+            return img
+            
+        # Determine target session ID for flat
+        if args.flat_session:
+            target_s_id = args.flat_session
+        else:
+            entry = metadata_map.get(path)
+            target_s_id = entry.get("session_id") if entry else None
+            
+        if target_s_id and target_s_id in flat_map:
+            if target_s_id not in flat_cache:
+                flat_path = flat_map[target_s_id]
+                try:
+                    f_data = load_image(flat_path, color=args.color)
+                    flat_cache[target_s_id] = f_data
+                except Exception as e:
+                    print(f"  [Warning] Failed to load flat for session {target_s_id}: {e}")
+                    flat_cache[target_s_id] = None
+            
+            f_data = flat_cache.get(target_s_id)
+            if f_data is not None:
+                return apply_flat(img, f_data, args.color)
+        else:
+            if target_s_id and target_s_id not in flat_cache:
+                print(f"  [Warning] No flat found for session ID '{target_s_id}' in {args.flat_dir}. Proceeding without flat.")
+                flat_cache[target_s_id] = None # Prevent spamming
+        return img
+
     import tempfile
     with tempfile.TemporaryDirectory() as tmp_dir:
         print(f"  [Processing] Initializing stack with {len(valid_files)} frames...")
         
         # Reference is loaded in requested mode
         ref_data = load_image(ref_path, color=args.color)
+        ref_data = get_and_apply_flat(ref_data, ref_path)
         
         # Save reference to disk
         ref_tmp_path = os.path.join(tmp_dir, "ref_aligned.npy")
@@ -191,6 +299,7 @@ def main():
             
             try:
                 img_data = load_image(f_path, color=args.color)
+                img_data = get_and_apply_flat(img_data, f_path)
                 aligned, _ = register_images(ref_data, img_data)
                 
                 if aligned is not None:
