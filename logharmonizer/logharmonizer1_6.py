@@ -444,8 +444,14 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     harmonizer = LogHarmonizer(config_path=args.config, interactive=args.interactive)
-    if args.csv: harmonizer.edit_csv_path = harmonizer.resolve_path(args.csv)
-    if args.json: harmonizer.master_json_path = harmonizer.resolve_path(args.json)
+    
+    if args.csv:
+        csv_p = harmonizer.resolve_path(args.csv)
+        harmonizer.edit_csv_path = csv_p if not os.path.isdir(csv_p) else os.path.join(csv_p, "shutter_log.csv")
+        
+    if args.json:
+        json_p = harmonizer.resolve_path(args.json)
+        harmonizer.master_json_path = json_p if not os.path.isdir(json_p) else os.path.join(json_p, "shutter_log.json")
 
     if args.mode == "c2j":
         harmonizer.run_csv_to_json()
