@@ -4,7 +4,7 @@
 # Component:    ShutterPro03 (Main Engine)
 # Author:       voyager3.stars
 # Web:          https://voyager3.stars.ne.jp
-# Version:      14.3.0 (JSON Spec v1.6.0 Compliance)
+# Version:      14.3.0 (JSON Spec v1.6.1 Compliance)
 # License:      MIT
 # Description:  A professional GPIO-based camera shutter controller designed 
 #               for Raspberry Pi. It orchestrates hardware triggering, 
@@ -12,8 +12,8 @@
 #               downloading via FlashAir.
 # ==============================================================================
 
-__version__ = "15.0.0"
-__json_spec__ = "1.6.0"
+__version__ = "15.0.1"
+__json_spec__ = "1.6.1"
 
 import os
 import sys

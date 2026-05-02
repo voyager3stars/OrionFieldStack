@@ -10,8 +10,8 @@
 #   - ポスト処理中の latest_shot.json 汚染を防止。
 # =================================================================
 
-__version__ = "2.2.0"
-__json_spec__ = "1.6.0"
+__version__ = "2.2.1"
+__json_spec__ = "1.6.1"
 
 import os
 import sys
@@ -215,7 +215,7 @@ class SkySolverEngine:
         temp_fd, temp_path = tempfile.mkstemp(dir=os.path.dirname(filepath), prefix="sse_tmp_", suffix=".csv")
         try:
             seen_comments = set()
-            new_cols = ["Solve_Status", "Solve_Confidence", "Matched_Stars", "Solve_Time_sec", "Solve_Path", "Solve_Orientation", "Solve_RA", "Solve_DEC", "Solve_RA_hms", "Solve_DEC_hms", "SSE_Version", "Solve_Timestamp"]
+            new_cols = ["Solve_Status", "Solve_Confidence", "Matched_Stars", "Solve_Time_sec", "Solve_Path", "Solve_Orientation", "Solve_RA", "Solve_DEC", "Solve_RA_hms", "Solve_DEC_dms", "SSE_Version", "Solve_Timestamp"]
             
             with open(filepath, 'r', encoding='utf-8-sig', newline='') as f_in, \
                  os.fdopen(temp_fd, 'w', encoding='utf-8-sig', newline='') as f_out:
@@ -263,7 +263,7 @@ class SkySolverEngine:
                             row["Solve_RA"] = f"{res['ra']:.8f}"
                             row["Solve_DEC"] = f"{res['dec']:.8f}"
                             row["Solve_RA_hms"] = self.deg_to_hms(res['ra'])
-                            row["Solve_DEC_hms"] = self.deg_to_dms(res['dec'])
+                            row["Solve_DEC_dms"] = self.deg_to_dms(res['dec'])
                             row["Matched_Stars"] = str(res.get("stars", ""))
                             orient = res.get("orientation")
                             row["Solve_Orientation"] = f"{orient:.2f}" if orient is not None else "0.00"

@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-LogHarmonizer1_6 v1.6.0
+LogHarmonizer1_6 v1.6.1
 Bidirectional synchronization between shutter_log.csv and shutter_log.json.
 Modes: [c2j] CSV to JSON (Default), [j2c] JSON to CSV.
-Precision synchronization with ShutterPro03, SSE, and StarFlux (v1.6.0 Spec).
+Precision synchronization with ShutterPro03, SSE, and StarFlux (v1.6.1 Spec).
 """
 
 import json
@@ -15,7 +15,7 @@ import sys
 from datetime import datetime
 
 class LogHarmonizer:
-    # Full mapping definition for v1.6.0 Spec Compliance
+    # Full mapping definition for v1.6.1 Spec Compliance
     # csv_header: (json_hierarchical_path, display_name)
     MAPPING = {
         "JSON_ver": "version",
@@ -79,7 +79,7 @@ class LogHarmonizer:
         "Solve_DEC": ("analysis", "SSE", "solved_coords", "dec_deg"),
         "Solve_Orientation": ("analysis", "SSE", "solved_coords", "orientation"),
         "Solve_RA_hms": ("analysis", "SSE", "solved_coords", "ra_hms"),
-        "Solve_DEC_hms": ("analysis", "SSE", "solved_coords", "dec_dms"),
+        "Solve_DEC_dms": ("analysis", "SSE", "solved_coords", "dec_dms"),
         "Matched_Stars": ("analysis", "SSE", "process_stats", "matched_stars"),
         "Solve_Time_sec": ("analysis", "SSE", "process_stats", "solve_duration_sec"),
         "sf_version": ("analysis", "SF", "sf_version"),
@@ -135,7 +135,7 @@ class LogHarmonizer:
         self.master_json_path = self.resolve_path(self.config["SYSTEM"]["MASTER_JSON"])
         self.edit_csv_path = self.resolve_path(self.config["SYSTEM"]["EDIT_CSV"])
         self.backup_dir = self.resolve_path(self.config["SYSTEM"]["BACKUP_DIR"])
-        self.version = "1.6.0" # Enforce 1.6.0
+        self.version = "1.6.1" # Enforce 1.6.1
         self.interactive = interactive
 
     def resolve_path(self, path):
@@ -217,7 +217,7 @@ class LogHarmonizer:
         mode_desc = "[CSV -> JSON] Sync Edit to Master" if mode == "c2j" else "[JSON -> CSV] Export Master to Edit"
         
         print("\n" + "="*50)
-        print(f"  LogHarmonizer1_6 v1.6.0")
+        print(f"  LogHarmonizer1_6 v1.6.1")
         print("="*50)
         print(f"  Mode:   {mode_desc}")
         print(f"  Source: {source}")
@@ -432,7 +432,7 @@ class LogHarmonizer:
         print(f"CSV exported successfully with {len(json_data)} records.")
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="LogHarmonizer1_6 v1.6.0")
+    parser = argparse.ArgumentParser(description="LogHarmonizer1_6 v1.6.1")
     parser.add_argument("-m", "--mode", choices=["c2j", "j2c"], default="c2j", 
                         help="Mode: c2j (CSV to JSON, default), j2c (JSON to CSV)")
     parser.add_argument("--config", default="config.json", help="Path to config file")

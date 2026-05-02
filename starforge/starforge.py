@@ -58,12 +58,12 @@ def get_best_frame(valid_files, metadata_map, criteria='sf_ell_med'):
             continue
             
         try:
-            # Check v1.6.0 top-level analysis first, fallback to older structure
+            # Check v1.6.1 top-level analysis first, fallback to older structure
             analysis = entry.get("analysis")
             if not analysis:
                 analysis = entry.get("record", {}).get("analysis", {})
             
-            # Support v1.6.0+ structure (analysis -> SF -> quality)
+            # Support v1.6.1+ structure (analysis -> SF -> quality)
             q = analysis.get("SF", {}).get("quality")
             if q is None:
                 # Support older structure (analysis -> quality)
@@ -155,12 +155,12 @@ def filter_by_quality(valid_files, metadata_map, criteria='sf_ell_med', threshol
         if not entry:
             continue
         try:
-            # Check v1.6.0 top-level analysis first, fallback to older structure
+            # Check v1.6.1 top-level analysis first, fallback to older structure
             analysis = entry.get("analysis")
             if not analysis:
                 analysis = entry.get("record", {}).get("analysis", {})
             
-            # Support v1.6.0+ structure (analysis -> SF -> quality)
+            # Support v1.6.1+ structure (analysis -> SF -> quality)
             q = analysis.get("SF", {}).get("quality")
             if q is None:
                 # Support older structure (analysis -> quality)

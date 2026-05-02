@@ -1,4 +1,4 @@
-# OrionFieldStack JSON Log Specification v1.6.0
+# OrionFieldStack JSON Log Specification v1.6.1
 
 ## 1. Overview
 This document defines the integrated log schema for the **OrionFieldStack** project. While JSON serves as the primary master log for full session data, this specification also defines the mapping to the flat CSV log for quick analysis. **No legacy fields from v1.3.2 have been removed.**
@@ -8,7 +8,7 @@ This document defines the integrated log schema for the **OrionFieldStack** proj
 ### 2.1 Root
 | Key | Type | Description | CSV Header |
 | :--- | :--- | :--- | :--- |
-| `version` | String | JSON Spec version (e.g., "1.5.0"). | **JSON_ver** |
+| `version` | String | JSON Spec version (e.g., "1.6.1"). | **JSON_ver** |
 | `session_id` | String | Unique session identifier. | **Session_ID** |
 | `objective` | String | Target object name (e.g., "M42"). | **Objective** |
 
@@ -93,7 +93,7 @@ This document defines the integrated log schema for the **OrionFieldStack** proj
 | &emsp;&emsp;└`dec_deg` | Float | Dec in decimal degrees. | **Solve_DEC** |
 | &emsp;&emsp;└`orientation`| Float | Field rotation angle. | **Solve_Orientation** |
 | &emsp;&emsp;└`ra_hms` | String | RA in HH:MM:SS.ss | **Solve_RA_hms** |
-| &emsp;&emsp;└`dec_dms` | String | Dec in +DD:MM:SS.ss | **Solve_DEC_hms** |
+| &emsp;&emsp;└`dec_dms` | String | Dec in +DD:MM:SS.ss | **Solve_DEC_dms** |
 | &emsp;└`process_stats` | **Object** | **Container for process metrics** | - |
 | &emsp;&emsp;└`matched_stars`| Int | Stars used for solving. |  **Matched_Stars** |
 | &emsp;&emsp;└`solve_duration_sec`| Float | Pure solve time (seconds). | **Solve_Time_sec** |
