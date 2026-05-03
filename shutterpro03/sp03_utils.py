@@ -96,33 +96,45 @@ class IndiClient:
 
     def _to_hms(self, val):
         """
-        Converts a decimal hour value to a formatted HH:MM:SS string.
+        Converts a decimal hour value to a formatted HHhMMmSSs string.
         """
-        if val is None: return "00:00:00"
+        if val is None: return "00h00m00s"
         try:
             val = float(val) % 24
             h = int(val)
             m = int((val - h) * 60)
-            s = int((((val - h) * 60) - m) * 60)
-            return f"{h:02d}:{m:02d}:{s:02d}"
+            s = int(round((((val - h) * 60) - m) * 60))
+            if s >= 60:
+                s -= 60
+                m += 1
+            if m >= 60:
+                m -= 60
+                h = (h + 1) % 24
+            return f"{h:02d}h{m:02d}m{s:02d}s"
         except: 
-            return "00:00:00"
+            return "00h00m00s"
 
     def _to_dms(self, val):
         """
-        Converts a decimal degree value to a formatted +DD:MM:SS string.
+        Converts a decimal degree value to a formatted +DD°MM'SS" string.
         """
-        if val is None: return "+00:00:00"
+        if val is None: return "+00°00'00\""
         try:
             val = float(val)
             sign = "-" if val < 0 else "+"
             val = abs(val)
             d = int(val)
             m = int((val - d) * 60)
-            s = int((((val - d) * 60) - m) * 60)
-            return f"{sign}{d:02d}:{m:02d}:{s:02d}"
+            s = int(round((((val - d) * 60) - m) * 60))
+            if s >= 60:
+                s -= 60
+                m += 1
+            if m >= 60:
+                m -= 60
+                d += 1
+            return f"{sign}{d:02d}°{m:02d}'{s:02d}\""
         except: 
-            return "+00:00:00"
+            return "+00°00'00\""
 
     def _parse_sexagesimal(self, val):
         """
@@ -354,26 +366,38 @@ def load_config_file(base_config):
 # --- Common Utilities (Legacy Support) ---
 
 def deg_to_hms(val):
-    if val is None: return "00:00:00"
+    if val is None: return "00h00m00s"
     try:
         val = (float(val) / 15.0) % 24
         h = int(val)
         m = int((val - h) * 60)
-        s = int((((val - h) * 60) - m) * 60)
-        return f"{h:02d}:{m:02d}:{s:02d}"
-    except: return "00:00:00"
+        s = int(round((((val - h) * 60) - m) * 60))
+        if s >= 60:
+            s -= 60
+            m += 1
+        if m >= 60:
+            m -= 60
+            h = (h + 1) % 24
+        return f"{h:02d}h{m:02d}m{s:02d}s"
+    except: return "00h00m00s"
 
 def deg_to_dms(val):
-    if val is None: return "+00:00:00"
+    if val is None: return "+00°00'00\""
     try:
         val = float(val)
         sign = "-" if val < 0 else "+"
         val = abs(val)
         d = int(val)
         m = int((val - d) * 60)
-        s = int((((val - d) * 60) - m) * 60)
-        return f"{sign}{d:02d}:{m:02d}:{s:02d}"
-    except: return "+00:00:00"
+        s = int(round((((val - d) * 60) - m) * 60))
+        if s >= 60:
+            s -= 60
+            m += 1
+        if m >= 60:
+            m -= 60
+            d += 1
+        return f"{sign}{d:02d}°{m:02d}'{s:02d}\""
+    except: return "+00°00'00\""
 
 def calculate_exposure_diff(actual_ms, exif_exp_tag):
     try:

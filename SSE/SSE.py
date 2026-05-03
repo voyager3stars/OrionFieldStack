@@ -10,8 +10,8 @@
 #   - ポスト処理中の latest_shot.json 汚染を防止。
 # =================================================================
 
-__version__ = "2.2.1"
-__json_spec__ = "1.6.1"
+__version__ = "2.2.2"
+__json_spec__ = "1.6.2"
 
 import os
 import sys
@@ -39,13 +39,18 @@ class SkySolverEngine:
 
     def deg_to_hms(self, ra_deg):
         ra_hours = (ra_deg % 360) / 15.0
-        h = int(ra_hours); m = int((ra_hours - h) * 60); s = (ra_hours - h - m/60) * 3600
-        return f"{h:02d}:{m:02d}:{s:05.2f}"
+        h = int(ra_hours); m = int((ra_hours - h) * 60); s = int(round((ra_hours - h - m/60) * 3600))
+        if s >= 60: s -= 60; m += 1
+        if m >= 60: m -= 60; h = (h + 1) % 24
+        return f"{h:02d}h{m:02d}m{s:02d}s"
 
     def deg_to_dms(self, dec_deg):
-        d = int(dec_deg); abs_d = abs(dec_deg); m = int((abs_d - abs(d)) * 60); s = (abs_d - abs(d) - m/60) * 3600
+        abs_val = abs(dec_deg)
+        d = int(abs_val); m = int((abs_val - d) * 60); s = int(round((abs_val - d - m/60) * 3600))
+        if s >= 60: s -= 60; m += 1
+        if m >= 60: m -= 60; d += 1
         sign = "+" if dec_deg >= 0 else "-"
-        return f"{sign}{abs(d):02d}:{m:02d}:{s:05.2f}"
+        return f"{sign}{d:02d}°{m:02d}'{s:02d}\""
 
     def get_star_rating(self, stars):
         if stars >= 50: return "★★★★★"

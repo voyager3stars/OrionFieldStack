@@ -1,4 +1,4 @@
-# OrionFieldStack JSON Log Specification v1.6.1
+# OrionFieldStack JSON Log Specification v1.6.2
 
 ## 1. Overview
 This document defines the integrated log schema for the **OrionFieldStack** project. While JSON serves as the primary master log for full session data, this specification also defines the mapping to the flat CSV log for quick analysis. **No legacy fields from v1.3.2 have been removed.**
@@ -34,7 +34,7 @@ This document defines the integrated log schema for the **OrionFieldStack** proj
 | &emsp;└`iso_timestamp` | String | Local time (ISO 8601). | **LocalTime** |
 | &emsp;└`timestamp_utc` | String | UTC time (ISO 8601: Z). | **UTC_Time** |
 | &emsp;└`utc_offset` | String | Current offset (e.g. +09:00) | **UTC_Offset** |
-| &emsp;└`lst_hms` | String | Local Sidereal Time (HH:MM:SS) | **LST** |
+| &emsp;└`lst_hms` | String | Local Sidereal Time (HHhMMmSSs) | **LST** |
 | &emsp;└`unixtime` | Float | Epoch seconds. | **UnixTime** |
 | &emsp;└`exposure_actual_sec`| Float | Duration (Software measured). | **Sf_Exp_t** |
 | &emsp;└`exposure_diff_sec` | Float | Difference: (Software - Exif). | **Diff Sf-Exif** |
@@ -58,8 +58,8 @@ This document defines the integrated log schema for the **OrionFieldStack** proj
 | └`mount` | **Object** | - | - |
 | &emsp;└`ra_deg` | Float | Right Ascension in degrees. | **RA** |
 | &emsp;└`dec_deg` | Float | Declination in degrees. | **DEC** |
-| &emsp;└`ra_hms` | String | Right Ascension (HH:MM:SS). | **RA_HMS** |
-| &emsp;└`dec_dms` | String | Declination (+DD:MM:SS). | **DEC_DMS** |
+| &emsp;└`ra_hms` | String | Right Ascension (HHhMMmSSs). | **RA_HMS** |
+| &emsp;└`dec_dms` | String | Declination (+DD°MM'SS"). | **DEC_DMS** |
 | &emsp;└`status` | String | Mount tracking status. | **MT_Status** |
 | &emsp;└`side_of_pier` | String | Pier side ("East" or "West"). | **Side** |
 | &emsp;└`hour_angle` | Float | LST - RA_deg (Current position) | **HourAngle** |
@@ -92,8 +92,8 @@ This document defines the integrated log schema for the **OrionFieldStack** proj
 | &emsp;&emsp;└`ra_deg` | Float | RA in decimal degrees. | **Solve_RA** |
 | &emsp;&emsp;└`dec_deg` | Float | Dec in decimal degrees. | **Solve_DEC** |
 | &emsp;&emsp;└`orientation`| Float | Field rotation angle. | **Solve_Orientation** |
-| &emsp;&emsp;└`ra_hms` | String | RA in HH:MM:SS.ss | **Solve_RA_hms** |
-| &emsp;&emsp;└`dec_dms` | String | Dec in +DD:MM:SS.ss | **Solve_DEC_dms** |
+| &emsp;&emsp;└`ra_hms` | String | RA in HHhMMmSSs | **Solve_RA_hms** |
+| &emsp;&emsp;└`dec_dms` | String | Dec in +DD°MM'SS" | **Solve_DEC_dms** |
 | &emsp;└`process_stats` | **Object** | **Container for process metrics** | - |
 | &emsp;&emsp;└`matched_stars`| Int | Stars used for solving. |  **Matched_Stars** |
 | &emsp;&emsp;└`solve_duration_sec`| Float | Pure solve time (seconds). | **Solve_Time_sec** |
