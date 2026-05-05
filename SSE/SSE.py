@@ -10,7 +10,7 @@
 #   - ポスト処理中の latest_shot.json 汚染を防止。
 # =================================================================
 
-__version__ = "2.2.2"
+__version__ = "2.2.3"
 __json_spec__ = "1.6.2"
 
 import os
@@ -196,7 +196,7 @@ class SkySolverEngine:
             print(f"  [Warning] JSON Update Failed: {e}")
 
     def _apply_res_to_dict(self, target_dict, res):
-        target_dict["record"].setdefault("analysis", {})
+        target_dict.setdefault("analysis", {})
         sse_data = {
             "solve_status": "success" if res["success"] else "failed",
             "solve_path": res.get("solve_path", "N/A"),
@@ -213,7 +213,7 @@ class SkySolverEngine:
                 "matched_stars": res.get("stars"),
                 "solve_duration_sec": res.get("duration", 0.0)
             }
-        target_dict["record"]["analysis"]["SSE"] = sse_data
+        target_dict["analysis"]["SSE"] = sse_data
 
     def _update_csv_file(self, filepath, target_filename, res):
         """Streaming update for CSV."""
@@ -291,7 +291,7 @@ class SkySolverEngine:
                 with open(log_path, 'r', encoding='utf-8') as f:
                     for r in json.load(f):
                         if r["record"]["file"]["name"] in target_name:
-                            analysis = r["record"].get("analysis", {})
+                            analysis = r.get("analysis", {})
                             is_solved = analysis.get("SSE", {}).get("solve_status") == "success" or analysis.get("solve_status") == "success"
                             ra_hint = r["record"]["mount"].get("ra_deg")
                             dec_hint = r["record"]["mount"].get("dec_deg"); break

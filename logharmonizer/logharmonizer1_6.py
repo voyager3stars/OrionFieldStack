@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-LogHarmonizer1_6 v1.6.2
+LogHarmonizer1_6 v1.6.3
 Bidirectional synchronization between shutter_log.csv and shutter_log.json.
 Modes: [c2j] CSV to JSON (Default), [j2c] JSON to CSV.
 Precision synchronization with ShutterPro03, SSE, and StarFlux (v1.6.2 Spec).
@@ -82,16 +82,16 @@ class LogHarmonizer:
         "Solve_DEC_dms": ("analysis", "SSE", "solved_coords", "dec_dms"),
         "Matched_Stars": ("analysis", "SSE", "process_stats", "matched_stars"),
         "Solve_Time_sec": ("analysis", "SSE", "process_stats", "solve_duration_sec"),
-        "sf_version": ("analysis", "SF", "sf_version"),
-        "sf_status": ("analysis", "SF", "sf_status"),
-        "sf_timestamp": ("analysis", "SF", "sf_timestamp"),
-        "sf_stars": ("analysis", "SF", "quality", "sf_stars"),
-        "sf_fwhm_med": ("analysis", "SF", "quality", "sf_fwhm_med"),
-        "sf_fwhm_mean": ("analysis", "SF", "quality", "sf_fwhm_mean"),
-        "sf_fwhm_std": ("analysis", "SF", "quality", "sf_fwhm_std"),
-        "sf_ell_med": ("analysis", "SF", "quality", "sf_ell_med"),
-        "sf_ell_mean": ("analysis", "SF", "quality", "sf_ell_mean"),
-        "sf_ell_std": ("analysis", "SF", "quality", "sf_ell_std")
+        "SF_version": ("analysis", "SF", "sf_version"),
+        "SF_status": ("analysis", "SF", "sf_status"),
+        "SF_timestamp": ("analysis", "SF", "sf_timestamp"),
+        "SF_stars": ("analysis", "SF", "quality", "sf_stars"),
+        "SF_fwhm_med": ("analysis", "SF", "quality", "sf_fwhm_med"),
+        "SF_fwhm_mean": ("analysis", "SF", "quality", "sf_fwhm_mean"),
+        "SF_fwhm_std": ("analysis", "SF", "quality", "sf_fwhm_std"),
+        "SF_ell_med": ("analysis", "SF", "quality", "sf_ell_med"),
+        "SF_ell_mean": ("analysis", "SF", "quality", "sf_ell_mean"),
+        "SF_ell_std": ("analysis", "SF", "quality", "sf_ell_std")
     }
 
     # Target precision for CSV output (Consistent with ShutterPro03, SSE, and StarFlux)
@@ -105,8 +105,8 @@ class LogHarmonizer:
         "HourAngle": 4,
         # 3 digits: Time and Quality stats
         "UnixTime": 3, "Sf_Exp_t": 3, "Exposure_Exif": 3, 
-        "sf_fwhm_med": 3, "sf_fwhm_mean": 3, "sf_fwhm_std": 3, 
-        "sf_ell_med": 3, "sf_ell_mean": 3, "sf_ell_std": 3,
+        "SF_fwhm_med": 3, "SF_fwhm_mean": 3, "SF_fwhm_std": 3, 
+        "SF_ell_med": 3, "SF_ell_mean": 3, "SF_ell_std": 3,
         # 2 digits: Performance and Reliability
         "Solve_Confidence": 2, "Solve_Orientation": 2, "FileSize": 2, "Pixel_Scale": 2,
         # 1 digit: Environment and Equipment
