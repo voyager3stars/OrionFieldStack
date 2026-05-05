@@ -1,7 +1,7 @@
 # OrionFieldStack JSON Log Specification v1.6.2
 
 ## 1. Overview
-This document defines the integrated log schema for the **OrionFieldStack** project. While JSON serves as the primary master log for full session data, this specification also defines the mapping to the flat CSV log for quick analysis. **No legacy fields from v1.3.2 have been removed.**
+This document defines the integrated log schema for the **OrionFieldStack** project.
 
 ## 2. Data Structure
 
@@ -11,6 +11,9 @@ This document defines the integrated log schema for the **OrionFieldStack** proj
 | `version` | String | JSON Spec version (e.g., "1.6.1"). | **JSON_ver** |
 | `session_id` | String | Unique session identifier. | **Session_ID** |
 | `objective` | String | Target object name (e.g., "M42"). | **Objective** |
+| `equipment` | **Object** | See 2.2 | - |
+| `record` | **Object** | See 2.3 | - |
+| `analysis` | **Object** | See 2.4 | - |
 
 ### 2.2 Equipment
 | Key | Type | Description |  CSV Header |

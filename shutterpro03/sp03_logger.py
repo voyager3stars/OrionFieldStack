@@ -3,7 +3,7 @@
 # Component:    ShutterPro03 Logger & Analyzer
 # Author:       voyager3.stars
 # Web:          https://voyager3.stars.ne.jp
-# Version:      14.1.1 (Refactored to use Pre-formatted Utils Data)
+# Version:      15.0.3 (JSON Log v1.6.2 Compliance)
 # License:      MIT
 # Description:  Handles asynchronous image analysis and telemetry 
 #               logging. Extracts Exif metadata, merges it with 
@@ -259,20 +259,37 @@ def analyzer_worker(analysis_queue, stop_event, CONFIG):
                     "tz_source": indi.get("tz_source")
                 },
                 "environment": {
-                    # utils側ですでに数値化されているため、to_float_or_none は不要に
                     "temp_c": indi.get("weather_temp"),
                     "humidity_pct": indi.get("weather_humi"),
                     "pressure_hPa": indi.get("weather_pres"),
                     "dew_point_c": indi.get("weather_dew"),
                     "cpu_temp_mount_c": indi.get("cpu_temp_mount"),
                     "cpu_temp_rpi_c": indi.get("cpu_temp_rpi")
-                },
-                "analysis": {
+                }
+            },
+            "analysis": {
+                "SSE": {
+                    "sse_version": None,
                     "solve_status": "pending",
-                    "solved_coords": None,
+                    "solve_path": None,
+                    "confidence": None,
+                    "timestamp": None,
+                    "solved_coords": {
+                        "ra_deg": None, "dec_deg": None, "orientation": None,
+                        "ra_hms": None, "dec_dms": None
+                    },
+                    "process_stats": {
+                        "matched_stars": None, "solve_duration_sec": None
+                    }
+                },
+                "SF": {
+                    "sf_version": None,
+                    "sf_status": "pending",
+                    "sf_timestamp": None,
                     "quality": {
-                        "hfr": None, "stars": None, "elongation": None, 
-                        "satellite_detected": False, "sky_brightness": None
+                        "sf_stars": None,
+                        "sf_fwhm_med": None, "sf_fwhm_mean": None, "sf_fwhm_std": None,
+                        "sf_ell_med": None,  "sf_ell_mean": None,  "sf_ell_std": None
                     }
                 }
             }
