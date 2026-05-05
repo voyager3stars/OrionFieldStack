@@ -21,7 +21,7 @@ from astropy.io import fits
 from astropy.stats import sigma_clipped_stats
 from photutils.detection import DAOStarFinder
 
-__version__ = "1.3.0"
+__version__ = "1.3.1"
 
 def load_image(file_path):
     """
@@ -79,7 +79,14 @@ def analyze_star_quality(data, stars, box_size=15):
     h, w = data.shape
     
     for star in stars:
-        x, y = int(round(star['xcentroid'])), int(round(star['ycentroid']))
+        # photutilsのバージョンによって 'x_centroid' または 'xcentroid' が使用される
+        x_val = star.get('x_centroid', star.get('xcentroid'))
+        y_val = star.get('y_centroid', star.get('ycentroid'))
+        
+        if x_val is None or y_val is None:
+            continue
+
+        x, y = int(round(x_val)), int(round(y_val))
         if x - half_box < 0 or x + half_box >= w or y - half_box < 0 or y + half_box >= h:
             continue
         cutout = data[y-half_box:y+half_box+1, x-half_box:x+half_box+1].copy()
@@ -135,7 +142,7 @@ def update_shutter_log(img_path, report):
                 # ファイル名の照合
                 name = entry.get("record", {}).get("file", {}).get("name", "")
                 if name and (name == img_name or name in img_name):
-                    analysis = entry["record"].setdefault("analysis", {})
+                    analysis = entry.setdefault("analysis", {})
                     if report.get("success"):
                         sf_data = {
                             "sf_version": __version__,
@@ -192,10 +199,10 @@ def update_csv_log(img_path, report):
     try:
         updated = False
         seen_comments = set()
-        sf_headers = [
-            "sf_stars", "sf_fwhm_med", "sf_fwhm_mean", "sf_fwhm_std",
-            "sf_ell_med", "sf_ell_mean", "sf_ell_std", "sf_status",
-            "sf_timestamp", "sf_version"
+        SF_headers = [
+            "SF_stars", "SF_fwhm_med", "SF_fwhm_mean", "SF_fwhm_std",
+            "SF_ell_med", "SF_ell_mean", "SF_ell_std", "SF_status",
+            "SF_timestamp", "SF_version"
         ]
 
         with open(log_path, 'r', encoding='utf-8-sig', newline='') as f_in, \
@@ -224,7 +231,7 @@ def update_csv_log(img_path, report):
             fieldnames = list(reader.fieldnames) if reader.fieldnames else []
             fieldnames = [f for f in fieldnames if f]
             
-            for h in sf_headers:
+            for h in SF_headers:
                 if h not in fieldnames:
                     fieldnames.append(h)
 
@@ -236,25 +243,25 @@ def update_csv_log(img_path, report):
                 csv_filename = row.get("File_Name", row.get("Filename", ""))
                 if csv_filename and (csv_filename == img_name or csv_filename in img_name):
                     if report.get("success"):
-                        row["sf_stars"]     = str(report["stars_analyzed"])
-                        row["sf_fwhm_med"]  = f"{report['fwhm']['median']:.3f}"
-                        row["sf_fwhm_mean"] = f"{report['fwhm']['mean']:.3f}"
-                        row["sf_fwhm_std"]  = f"{report['fwhm']['sigma']:.3f}"
-                        row["sf_ell_med"]   = f"{report['ellipticity']['median']:.3f}"
-                        row["sf_ell_mean"]  = f"{report['ellipticity']['mean']:.3f}"
-                        row["sf_ell_std"]   = f"{report['ellipticity']['sigma']:.3f}"
-                        row["sf_status"]    = "success"
+                        row["SF_stars"]     = str(report["stars_analyzed"])
+                        row["SF_fwhm_med"]  = f"{report['fwhm']['median']:.3f}"
+                        row["SF_fwhm_mean"] = f"{report['fwhm']['mean']:.3f}"
+                        row["SF_fwhm_std"]  = f"{report['fwhm']['sigma']:.3f}"
+                        row["SF_ell_med"]   = f"{report['ellipticity']['median']:.3f}"
+                        row["SF_ell_mean"]  = f"{report['ellipticity']['mean']:.3f}"
+                        row["SF_ell_std"]   = f"{report['ellipticity']['sigma']:.3f}"
+                        row["SF_status"]    = "success"
                     else:
-                        row["sf_stars"]     = ""
-                        row["sf_fwhm_med"]  = ""
-                        row["sf_fwhm_mean"] = ""
-                        row["sf_fwhm_std"]  = ""
-                        row["sf_ell_med"]   = ""
-                        row["sf_ell_mean"]  = ""
-                        row["sf_ell_std"]   = ""
-                        row["sf_status"]    = "error"
-                    row["sf_timestamp"] = report["timestamp"]
-                    row["sf_version"]   = __version__
+                        row["SF_stars"]     = ""
+                        row["SF_fwhm_med"]  = ""
+                        row["SF_fwhm_mean"] = ""
+                        row["SF_fwhm_std"]  = ""
+                        row["SF_ell_med"]   = ""
+                        row["SF_ell_mean"]  = ""
+                        row["SF_ell_std"]   = ""
+                        row["SF_status"]    = "error"
+                    row["SF_timestamp"] = report["timestamp"]
+                    row["SF_version"]   = __version__
                     updated = True
                 writer.writerow(row)
         
@@ -288,7 +295,7 @@ def check_if_already_processed(img_path, force_mode):
             data = json.load(f)
             for entry in data:
                 if entry["record"]["file"]["name"] == img_name:
-                    sf = entry["record"].get("analysis", {}).get("SF", {})
+                    sf = entry.get("analysis", {}).get("SF", {})
                     if sf and sf.get("sf_version") == __version__ and sf.get("sf_status") in ["success", "error"]:
                         return True
                     # Fallback for old logs
