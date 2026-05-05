@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-ExifScribe v1.0.0
+ExifScribe v1.0.1
 Reads EXIF metadata from DNG files and patches shutter_log.json
 (record.exif / record.file sections only).
 
@@ -30,7 +30,8 @@ except ImportError:
     print("  Install with: pip install exifread")
     sys.exit(1)
 
-VERSION = "1.6.0"
+SPEC_VERSION = "1.6.2"
+TOOL_VERSION = "1.0.1"
 
 # ---------------------------------------------------------------------------
 # Constants & Mappings
@@ -290,7 +291,7 @@ def build_minimal_entry(filename, exif_data):
     All other sections are left empty/null.
     """
     entry = {
-        "version": VERSION,
+        "version": SPEC_VERSION,
         "session_id": None,
         "objective": None,
         "equipment": {
@@ -303,27 +304,68 @@ def build_minimal_entry(filename, exif_data):
             "meta": {
                 "iso_timestamp": None,
                 "timestamp_utc": None,
+                "utc_offset": None,
+                "lst_hms": None,
+                "unixtime": None,
+                "exposure_actual_sec": None,
+                "exposure_diff_sec": None,
+                "shot_mode": None,
                 "frame_type": "Light"
             },
             "file": {
                 "name": filename,
                 "path": None,
                 "format": os.path.splitext(filename)[1].upper().lstrip("."),
+                "width": None,
+                "height": None,
+                "size_mb": None
             },
-            "exif": {},
-            "mount": {},
-            "location": {},
-            "environment": {},
-            "analysis": {
-                "SSE": {
-                    "solve_status": "pending",
-                    "solved_coords": {},
-                    "process_stats": {}
-                },
-                "SF": {
-                    "sf_status": "pending",
-                    "quality": {}
-                }
+            "exif": {
+                "iso": None,
+                "shutter_sec": None,
+                "datetime_original": None,
+                "model": None,
+                "lat": None,
+                "lon": None,
+                "alt": None
+            },
+            "mount": {
+                "ra_deg": None,
+                "dec_deg": None,
+                "ra_hms": None,
+                "dec_dms": None,
+                "mount_status": None,
+                "side_of_pier": None,
+                "hour_angle": None
+            },
+            "location": {
+                "site_name": None,
+                "latitude": None,
+                "longitude": None,
+                "elevation": None,
+                "tz_source": None
+            },
+            "environment": {
+                "temp_c": None,
+                "humidity_pct": None,
+                "pressure_hPa": None,
+                "dew_point_c": None,
+                "cpu_temp_mount_c": None,
+                "cpu_temp_rpi_c": None
+            }
+        },
+        "analysis": {
+            "SSE": {
+                "solve_status": "pending",
+                "sse_version": None,
+                "solved_coords": {},
+                "process_stats": {}
+            },
+            "SF": {
+                "sf_version": None,
+                "sf_status": "pending",
+                "sf_timestamp": None,
+                "quality": {}
             }
         }
     }
@@ -519,7 +561,7 @@ class ExifScribe:
 
     def run(self):
         print("=" * 60)
-        print(f"  ExifScribe v{VERSION}")
+        print(f"  ExifScribe v{TOOL_VERSION} (JSON Spec v{SPEC_VERSION})")
         print("=" * 60)
         print(f"  Scan dir  : {self.scan_dir}")
         print(f"  JSON      : {self.json_path}")
@@ -663,7 +705,7 @@ class ExifScribe:
 
 def main():
     parser = argparse.ArgumentParser(
-        description=f"ExifScribe v{VERSION} - Patch shutter_log.json with DNG EXIF metadata",
+        description=f"ExifScribe v{TOOL_VERSION} - Patch shutter_log.json with DNG EXIF metadata",
         formatter_class=argparse.RawTextHelpFormatter
     )
     parser.add_argument(

@@ -1,8 +1,8 @@
-# ExifScribe v1.6.0
+# ExifScribe v1.0.1
 
 **DNG EXIFメタデータ統合・同期ツール**
 
-ExifScribeは、撮影されたDNGファイルからEXIF情報を抽出し、`shutter_log.json` の該当レコードを補完または更新するためのツールです。OrionFieldStack v1.6.0 仕様に準拠し、記録漏れや情報の不一致を効率的に解消します。
+ExifScribeは、撮影されたDNGファイルからEXIF情報を抽出し、`shutter_log.json` の該当レコードを補完または更新するためのツールです。OrionFieldStack v1.6.2 仕様に準拠し、記録漏れや情報の不一致を効率的に解消します。
 
 ---
 
