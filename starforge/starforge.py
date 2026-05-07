@@ -4,12 +4,100 @@ import sys
 import json
 import argparse
 import glob
+import tempfile
 import numpy as np
 from sf_loader import load_image
 from sf_align import register_images
 from sf_stack import stack_images, save_stacked_fits
 
-__version__ = "1.2.0"
+__version__ = "1.3.3"
+
+# ANSI Colors
+C_YELLOW_GREEN = "\033[38;5;154m"
+C_RESET = "\033[0m"
+
+class CustomHelpFormatter(argparse.HelpFormatter):
+    """
+    Custom formatter that displays current values aligned on the right.
+    """
+    def _format_action(self, action):
+        # Format the basic help output
+        original = super()._format_action(action)
+        
+        # Skip for positional arguments or help
+        if not action.option_strings or action.dest == 'help':
+            return original
+
+        # Get current value
+        val = action.default
+        if val is None:
+            val_str = "None"
+        elif isinstance(val, bool):
+            val_str = "color" if val else "mono" # Legacy compatibility during transition
+        else:
+            val_str = str(val)
+
+        # Split description to find where to append
+        lines = original.splitlines()
+        if not lines:
+            return original
+
+        # Find the first line with the description
+        # Usually it's the first line, but we need to find where the option strings end
+        # A simpler way: just append to the first line with padding
+        first_line = lines[0]
+        
+        # Alignment position
+        align_pos = 50
+        
+        if len(first_line) < align_pos:
+            padding = align_pos - len(first_line)
+            lines[0] = f"{first_line}{' ' * padding}{C_YELLOW_GREEN}[{val_str}]{C_RESET}"
+        else:
+            lines[0] = f"{first_line}  {C_YELLOW_GREEN}[{val_str}]{C_RESET}"
+            
+        return "\n".join(lines) + "\n"
+
+def load_config():
+    """Loads settings from config.json if it exists."""
+    config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.json")
+    defaults = {
+        "threshold": 0.2,
+        "method": "sigma_clip",
+        "mode": "mono",
+        "out": "AUTO",
+        "limit": None,
+        "flat_dir": None,
+        "flat_session": None,
+        "use_flat": True,
+        "session": None,
+        "obj": None
+    }
+    if os.path.exists(config_path):
+        try:
+            with open(config_path, 'r', encoding='utf-8') as f:
+                cf = json.load(f)
+                # Expand tildes in paths
+                if cf.get("flat_dir"):
+                    cf["flat_dir"] = os.path.expanduser(cf["flat_dir"])
+                # Handle legacy 'color' key if present
+                if "color" in cf:
+                    cf["mode"] = "color" if cf.pop("color") else "mono"
+                defaults.update(cf)
+        except Exception as e:
+            print(f"  [Warning] Failed to load config.json: {e}")
+    return defaults
+
+
+def get_nested_val(data, keys, default=None):
+    """Safe retrieval from nested dictionaries."""
+    for key in keys:
+        if isinstance(data, dict):
+            data = data.get(key)
+        else:
+            return default
+    return data if data is not None else default
+
 
 def apply_flat(img_data, flat_data, color):
     """
@@ -46,35 +134,31 @@ def apply_flat(img_data, flat_data, color):
 def get_best_frame(valid_files, metadata_map, criteria='sf_ell_med'):
     """
     Scans the metadata_map to find the entry with the best quality metrics
-    among the provided valid_files.
+    among the provided valid_files. Fully v1.6.2 compliant.
     """
     best_entry = None
     min_val = float('inf')
     
     for f_path in valid_files:
-        f_name = os.path.basename(f_path)
         entry = metadata_map.get(f_path)
         if not entry:
             continue
             
-        try:
-            # Check v1.6.1 top-level analysis first, fallback to older structure
-            analysis = entry.get("analysis")
-            if not analysis:
-                analysis = entry.get("record", {}).get("analysis", {})
+        # Try finding quality based on v1.6.2 -> v1.6.1 -> legacy
+        # v1.6.2+: top-level 'analysis' -> 'SF' -> 'quality'
+        q = get_nested_val(entry, ["analysis", "SF", "quality"])
+        if q is None:
+            # v1.6.1: top-level 'analysis' -> 'quality'
+            q = get_nested_val(entry, ["analysis", "quality"])
+        if q is None:
+            # v1.6.0: 'record' -> 'analysis' -> 'quality'
+            q = get_nested_val(entry, ["record", "analysis", "quality"])
             
-            # Support v1.6.1+ structure (analysis -> SF -> quality)
-            q = analysis.get("SF", {}).get("quality")
-            if q is None:
-                # Support older structure (analysis -> quality)
-                q = analysis.get("quality", {})
-            
+        if q:
             val = q.get(criteria)
             if val is not None and val < min_val:
                 min_val = val
                 best_entry = f_path
-        except (KeyError, TypeError):
-            continue
             
     return best_entry, min_val
 
@@ -147,47 +231,62 @@ def collect_images_and_metadata(inputs, session_filters=None, obj_filters=None):
 
 def filter_by_quality(valid_files, metadata_map, criteria='sf_ell_med', threshold=0.2):
     """
-    Returns only files that meet the quality threshold.
+    Returns only files that meet the quality threshold. Fully v1.6.2 compliant.
     """
     passed = []
     for f_path in valid_files:
         entry = metadata_map.get(f_path)
         if not entry:
             continue
-        try:
-            # Check v1.6.1 top-level analysis first, fallback to older structure
-            analysis = entry.get("analysis")
-            if not analysis:
-                analysis = entry.get("record", {}).get("analysis", {})
             
-            # Support v1.6.1+ structure (analysis -> SF -> quality)
-            q = analysis.get("SF", {}).get("quality")
-            if q is None:
-                # Support older structure (analysis -> quality)
-                q = analysis.get("quality", {})
+        q = get_nested_val(entry, ["analysis", "SF", "quality"])
+        if q is None:
+            q = get_nested_val(entry, ["analysis", "quality"])
+        if q is None:
+            q = get_nested_val(entry, ["record", "analysis", "quality"])
                 
+        if q:
             val = q.get(criteria)
             if val is not None and val <= threshold:
                 passed.append(f_path)
-        except (KeyError, TypeError):
-            continue
+                
     return passed
 
 def main():
-    parser = argparse.ArgumentParser(description=f"StarForge v{__version__}: High-Precision Multi-Session Stacker")
+    import datetime
+    conf = load_config()
+    
+    parser = argparse.ArgumentParser(
+        description=f"StarForge v{__version__}: High-Precision Multi-Session Stacker",
+        formatter_class=CustomHelpFormatter
+    )
     parser.add_argument("inputs", nargs='+', help="Paths to images, directories, or wildcards")
-    parser.add_argument("--threshold", type=float, default=0.2, help="Ellipticity threshold for filtering (default: 0.2)")
-    parser.add_argument("--session", nargs='+', help="Filter by Session ID(s)")
-    parser.add_argument("--obj", nargs='+', help="Filter by Objective name(s)")
-    parser.add_argument("--color", action="store_true", help="Enable color (RGB) processing")
-    parser.add_argument("--method", choices=['median', 'mean', 'sigma_clip'], default='sigma_clip', help="Stacking method")
-    parser.add_argument("--out", default="master_stacked.fits", help="Output filename")
-    parser.add_argument("--limit", type=int, help="Limit number of frames to stack")
-    parser.add_argument("--flat_dir", default=None, help="Directory containing flat images and their shutter_log.json")
-    parser.add_argument("--flat_session", default=None, help="Force a specific session ID for flats (overrides automatic matching)")
+    parser.add_argument("--threshold", type=float, default=conf["threshold"], help="Ellipticity threshold for filtering")
+    parser.add_argument("--session", nargs='+', default=conf["session"], help="Filter by Session ID(s)")
+    parser.add_argument("--obj", nargs='+', default=conf["obj"], help="Filter by Objective name(s)")
+    parser.add_argument("--mode", choices=['color', 'mono'], default=conf["mode"], help="Processing mode")
+    parser.add_argument("--method", choices=['median', 'mean', 'sigma_clip'], default=conf["method"], help="Stacking method")
+    parser.add_argument("--out", default=conf["out"], help="Output filename (AUTO for dynamic name)")
+    parser.add_argument("--limit", type=int, default=conf["limit"], help="Limit number of frames to stack")
+    parser.add_argument("--flat_dir", default=conf["flat_dir"], help="Directory containing flat images")
+    parser.add_argument("--flat_session", default=conf["flat_session"], help="Force a specific session ID for flats")
+    
+    # Flat on/off toggle
+    flat_group = parser.add_mutually_exclusive_group()
+    flat_group.add_argument("--flat", action="store_true", dest="use_flat", default=conf["use_flat"], help="Enable flat correction")
+    flat_group.add_argument("--no-flat", action="store_false", dest="use_flat", help="Disable flat correction")
+    
     args = parser.parse_args()
+    
+    # Internal flag for compatibility with functions
+    args.color = (args.mode == 'color')
+    
+    # Post-process inputs to expand tildes
+    args.inputs = [os.path.expanduser(i) for i in args.inputs]
+    if args.flat_dir:
+        args.flat_dir = os.path.expanduser(args.flat_dir)
 
-    mode_str = "COLOR" if args.color else "MONO"
+    mode_str = args.mode.upper()
     print(f"StarForge v{__version__} [{mode_str}] >> Initializing file collection...")
     
     # 1. Collect & Initial Filter (Existence, Metadata, Session/Obj)
@@ -198,6 +297,18 @@ def main():
         sys.exit(1)
         
     print(f"  [Collect] Found {len(initial_files)} files with metadata.")
+
+    # Dynamic output name generation if needed
+    if args.out == "AUTO":
+        # Extract sessions and objectives from the metadata of participating files
+        sessions = sorted(list(set([m.get("session_id") for m in metadata_map.values() if m.get("session_id")])))
+        objs = sorted(list(set([m.get("objective") for m in metadata_map.values() if m.get("objective")])))
+        
+        s_part = sessions[0] if len(sessions) == 1 else ("MultiSession" if sessions else "NoSession")
+        o_part = objs[0] if len(objs) == 1 else ("MultiObject" if objs else "NoObject")
+        now_str = datetime.datetime.now().strftime("%y%m%d%H%M")
+        args.out = f"{s_part}_{o_part}_{args.mode}_{now_str}.fits"
+        print(f"  [Auto-Out] Generated filename: {args.out}")
 
     # 2. Select Reference (Best ellipticity among initial set)
     # Reference frame is always loaded as mono for quality check anyway, but here we just need the path
@@ -222,31 +333,35 @@ def main():
         sys.exit(1)
         
     # 4. Load & Pre-process flats if requested
-    flat_map = {}
+    # We collect all flats per session to support master flat generation
+    flat_inventory = {}
     if args.flat_dir:
         flat_log_path = os.path.join(args.flat_dir, "shutter_log.json")
         if os.path.exists(flat_log_path):
-            print(f"  [Flats] Loading flat metadata from {flat_log_path}...")
+            print(f"  [Flats] Inventorying flat files from {flat_log_path}...")
             try:
                 with open(flat_log_path, 'r', encoding='utf-8') as f:
                     f_log = json.load(f)
                     for entry in f_log:
                         if "record" in entry and "file" in entry["record"]:
                             s_id = entry.get("session_id")
+                            if not s_id: continue
                             f_name = entry["record"]["file"]["name"]
                             f_path = os.path.abspath(os.path.join(args.flat_dir, f_name))
-                            if s_id and s_id not in flat_map and os.path.exists(f_path):
-                                flat_map[s_id] = f_path
-                print(f"  [Flats] Found flats for {len(flat_map)} sessions.")
+                            if os.path.exists(f_path):
+                                if s_id not in flat_inventory:
+                                    flat_inventory[s_id] = []
+                                flat_inventory[s_id].append(f_path)
+                print(f"  [Flats] Found flat frames for {len(flat_inventory)} sessions.")
             except Exception as e:
                 print(f"  [Warning] Failed to read flat log: {e}")
         else:
             print(f"  [Warning] No shutter_log.json found in {args.flat_dir}")
 
     flat_cache = {}
-    
+
     def get_and_apply_flat(img, path):
-        if not args.flat_dir:
+        if not args.flat_dir or not args.use_flat:
             return img
             
         # Determine target session ID for flat
@@ -256,26 +371,61 @@ def main():
             entry = metadata_map.get(path)
             target_s_id = entry.get("session_id") if entry else None
             
-        if target_s_id and target_s_id in flat_map:
-            if target_s_id not in flat_cache:
-                flat_path = flat_map[target_s_id]
-                try:
-                    f_data = load_image(flat_path, color=args.color)
-                    flat_cache[target_s_id] = f_data
-                except Exception as e:
-                    print(f"  [Warning] Failed to load flat for session {target_s_id}: {e}")
-                    flat_cache[target_s_id] = None
-            
-            f_data = flat_cache.get(target_s_id)
-            if f_data is not None:
-                return apply_flat(img, f_data, args.color)
-        else:
-            if target_s_id and target_s_id not in flat_cache:
-                print(f"  [Warning] No flat found for session ID '{target_s_id}' in {args.flat_dir}. Proceeding without flat.")
-                flat_cache[target_s_id] = None # Prevent spamming
-        return img
+        if not target_s_id:
+            return img
 
-    import tempfile
+        if target_s_id in flat_cache:
+            f_data = flat_cache[target_s_id]
+            return apply_flat(img, f_data, args.color) if f_data is not None else img
+
+        # Try to find or generate master flat
+        master_name = f"master_flat_{target_s_id}_{args.mode}.fits"
+        master_path = os.path.join(args.flat_dir, master_name)
+        
+        if os.path.exists(master_path):
+            print(f"  [Flats] Found existing master flat: {master_name}")
+            try:
+                f_data = load_image(master_path, color=args.color)
+                flat_cache[target_s_id] = f_data
+                return apply_flat(img, f_data, args.color)
+            except Exception as e:
+                print(f"  [Error] Failed to load master flat {master_name}: {e}")
+                flat_cache[target_s_id] = None
+                return img
+
+        # Generate new master flat if multiple frames are available
+        flats_to_process = flat_inventory.get(target_s_id, [])
+        if not flats_to_process:
+            if target_s_id not in flat_cache:
+                print(f"  [Warning] No flat frames found for session: {target_s_id}")
+                flat_cache[target_s_id] = None
+            return img
+
+        print(f"  [Flats] Generating master flat for session {target_s_id} ({len(flats_to_process)} frames)...")
+        try:
+            with tempfile.TemporaryDirectory() as flat_tmp_dir:
+                npy_paths = []
+                for i, f_p in enumerate(flats_to_process):
+                    f_img = load_image(f_p, color=args.color)
+                    tmp_npy = os.path.join(flat_tmp_dir, f"flat_{i}.npy")
+                    np.save(tmp_npy, f_img)
+                    npy_paths.append(tmp_npy)
+                
+                # Stack without registration for flats
+                master_f_data = stack_images(npy_paths, method='median')
+                if master_f_data is not None:
+                    save_stacked_fits(master_f_data, master_path)
+                    print(f"  [Flats] Saved new master flat: {master_name}")
+                    flat_cache[target_s_id] = master_f_data
+                    return apply_flat(img, master_f_data, args.color)
+                else:
+                    flat_cache[target_s_id] = None
+                    return img
+        except Exception as e:
+            print(f"  [Error] Failed to generate master flat for session {target_s_id}: {e}")
+            flat_cache[target_s_id] = None
+            return img
+
     with tempfile.TemporaryDirectory() as tmp_dir:
         print(f"  [Processing] Initializing stack with {len(valid_files)} frames...")
         

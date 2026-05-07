@@ -1,0 +1,10 @@
+{
+    "threshold": 0.2,
+    "method": "sigma_clip",
+    "mode": "mono",
+    "out": "AUTO",
+    "limit": null,
+    "flat_dir": "~/Pictures/flat",
+    "flat_session": "260412_2218_flat_full",
+    "use_flat": true
+}
