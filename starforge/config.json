@@ -6,5 +6,6 @@
     "limit": null,
     "flat_dir": "~/Pictures/flat",
     "flat_session": "260412_2218_flat_full",
-    "use_flat": true
+    "use_flat": true,
+    "out_dir": "./output"
 }

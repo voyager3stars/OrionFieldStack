@@ -1,10 +1,12 @@
-# StarForge v1.3.3
+# StarForge v1.3.4
 
 **High-Precision Multi-Session Astronomical Image Stacker & Register**
 
 StarForgeは、`StarFlux` による画像品質解析結果（楕円率など）を活用し、複数の天体画像を自動的に位置合わせ・スタッキングするハイパワーなツールです。
 
-最新バージョンでは、マルチセッション撮影への完全対応に加え、**マスターフラットの自動生成・再利用**、`config.json` による高度な設定管理、**動的な出力ファイル名生成**、そしてフラット補正の明示的な **ON/OFF 切り替え**をサポートしています。
+最新バージョンでは、マルチセッション撮影への完全対応に加え、**マスターフラットの自動生成・再利用**、`config.json` による高度な設定管理、**動的な出力ファイル名生成**、フラット補正の明示的な **ON/OFF 切り替え**、そして **詳細なセッションレポート（Markdown & HTML）の自動出力** をサポートしています。
+
+また、出力ディレクトリ（`--out_dir`）を柔軟に指定できるようになりました。
 
 ---
 
@@ -35,6 +37,7 @@ pip install -r requirements.txt
     "method": "sigma_clip",
     "mode": "mono",
     "out": "AUTO",
+    "out_dir": "./output",
     "use_flat": true,
     "flat_dir": "~/Pictures/flat"
 }
@@ -68,12 +71,29 @@ pip install -r requirements.txt
 | `--flat` / `--no-flat` | `ON` | フラット補正の有効/無効を明示的に指定。 |
 | `--flat_dir` | - | フラット画像群が含まれるディレクトリ。 |
 | `--method` | `sigma_clip` | スタッキング手法 (`median`, `mean`, `sigma_clip`)。 |
-| `--out` | `AUTO` | 出力名。`AUTO` で動的ファイル名を生成。 |
+| `--out` | `AUTO` | 出力ファイル名。`AUTO` でセッション情報から動的生成。 |
+| `--out_dir` | `.` | FITSファイルおよびレポートの出力先ディレクトリ。 |
 
 ### 📁 動的な出力ファイル名 (`AUTO`)
 `--out` が `AUTO` の場合、以下のパターンでファイル名を自動生成します。
 `[Session]_[Object]_[Mode]_[YYMMDDHHmm].fits`
 例: `20260321_2345_NGC4565_color_2604272102.fits`
+
+---
+
+## 📊 Session Reports
+
+スタッキング完了後、以下の3種類のレポートファイルが自動生成されます。これらは `--out_dir` で指定したフォルダに、FITSファイルと同じベース名で保存されます。
+
+1.  **`{basename}.md`**:
+    - 日本語/英語のバイリンガル形式。
+    - 撮影機材、スタック統計、Plate Solve結果（RA/DEC/回転角）、使用した全ファイルリストを網羅。
+2.  **`{basename}_summary.html`**:
+    - 要約版HTMLレポート。
+    - "Voyager" スタイルの美麗なデザインで、撮影の概要を素早く確認可能。
+3.  **`{basename}_full.html`**:
+    - 詳細版HTMLレポート。
+    - サマリの内容に加え、使用された全ライトフレーム・フラットフレームのリストが含まれます。
 
 ---
 
@@ -84,7 +104,8 @@ pip install -r requirements.txt
     - `flat_dir` 内に `master_flat_[Session]_[Mode].fits` があれば自動ロード。
     - なければ全フラットを `median` スタックしてマスターを新規生成・保存。
 3.  **レジストレーション**: `astroalign` によるサブピクセル精度の星位置合わせ。
-4.  **チャンクスタッキング**: メモリ効率を考慮した分割処理によるマスター合成。
+4.  **スタッキング**: メモリ効率を考慮した合成処理。
+5.  **レポート生成**: 撮像・スタック・解析データを集約し、MD/HTMLレポートを出力。
 
 ---
 
