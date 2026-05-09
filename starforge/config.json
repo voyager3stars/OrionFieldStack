@@ -1,11 +1,14 @@
 {
     "threshold": 0.2,
     "method": "sigma_clip",
-    "mode": "mono",
+    "mode": "color",
     "out": "AUTO",
     "limit": null,
     "flat_dir": "~/Pictures/flat",
     "flat_session": "260412_2218_flat_full",
-    "use_flat": true,
+    "use_flat": false,
+    "dark_dir": "~/Pictures/dark",
+    "dark_session": "20260322_0041",
+    "use_dark": false,
     "out_dir": "./output"
 }

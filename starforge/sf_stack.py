@@ -1,5 +1,6 @@
 import numpy as np
 from astropy.stats import sigma_clip
+import gc
 
 def stack_images(image_paths, method='median', sigma=3.0, iters=5, chunk_size=128):
     """
@@ -45,11 +46,16 @@ def stack_images(image_paths, method='median', sigma=3.0, iters=5, chunk_size=12
             # Fill masked values with median
             result[y_start:y_end, ...] = chunk_mean.filled(np.median(chunk, axis=0))
             
+            # Explicitly free memory mapping for these temporary arrays
+            del clipped
+            del chunk_mean
+            
         else:
             raise ValueError(f"Unsupported stacking method: {method}")
             
     print(f"    [Stack-Logic] 100% complete.")
     del handles
+    gc.collect()
     return result
 
 def save_stacked_fits(data, output_path, header=None):

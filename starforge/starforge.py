@@ -10,7 +10,7 @@ from sf_loader import load_image
 from sf_align import register_images
 from sf_stack import stack_images, save_stacked_fits
 
-__version__ = "1.3.4"
+__version__ = "1.4.0"
 
 # ANSI Colors
 C_YELLOW_GREEN = "\033[38;5;154m"
@@ -28,12 +28,25 @@ class CustomHelpFormatter(argparse.HelpFormatter):
         if not action.option_strings or action.dest == 'help':
             return original
 
+        # Custom block formatting for calibration flags
+        if action.dest in ['use_flat', 'use_dark']:
+            label = "flat field correction" if action.dest == 'use_flat' else "dark frame subtraction"
+            status = "Enabled" if action.default else "Disabled"
+            
+            # If it's the positive flag, prepend the header
+            if '--no-' not in action.option_strings[0]:
+                header = f" {label}{' ' * (30 - len(label))}{C_YELLOW_GREEN}[{status}]{C_RESET}\n"
+                return header + f"  {original.strip()}\n"
+            else:
+                # For negative flag, just indent it and remove status
+                return f"  {original.strip()}\n"
+
         # Get current value
         val = action.default
         if val is None:
             val_str = "None"
         elif isinstance(val, bool):
-            val_str = "color" if val else "mono" # Legacy compatibility during transition
+            val_str = "Enabled" if val else "Disabled"
         else:
             val_str = str(val)
 
@@ -71,6 +84,9 @@ def load_config():
         "flat_dir": None,
         "flat_session": None,
         "use_flat": True,
+        "dark_dir": None,
+        "dark_session": None,
+        "use_dark": True,
         "session": None,
         "obj": None
     }
@@ -79,10 +95,9 @@ def load_config():
             with open(config_path, 'r', encoding='utf-8') as f:
                 cf = json.load(f)
                 # Expand tildes in paths
-                if cf.get("flat_dir"):
-                    cf["flat_dir"] = os.path.expanduser(cf["flat_dir"])
-                if cf.get("out_dir"):
-                    cf["out_dir"] = os.path.expanduser(cf["out_dir"])
+                for k in ["flat_dir", "dark_dir", "out_dir"]:
+                    if cf.get(k):
+                        cf[k] = os.path.expanduser(cf[k])
                 # Handle legacy 'color' key if present
                 if "color" in cf:
                     cf["mode"] = "color" if cf.pop("color") else "mono"
@@ -133,6 +148,22 @@ def apply_flat(img_data, flat_data, color):
     flat_safe = np.maximum(flat_normalized, 1e-5)
     corrected = img_data / flat_safe
     return corrected.astype(np.float32)
+
+def apply_dark(img_data, dark_data):
+    """
+    Applies dark frame subtraction to an image.
+    img_data and dark_data should be numpy arrays of the same shape.
+    """
+    if img_data.shape != dark_data.shape:
+        print("  [Warning] Dark image shape does not match. Shape mismatch could cause errors.")
+        
+    # Subtract dark from light
+    corrected = img_data - dark_data
+    
+    # Clip negative values to zero (optional for astronomical data, but safer for display/processing)
+    # Actually, for stacking, we might want to keep negatives if we're doing bias/dark-flat correctly, 
+    # but here we'll just clip at 0 for simplicity.
+    return np.maximum(corrected, 0).astype(np.float32)
 
 def get_best_frame(valid_files, metadata_map, criteria='sf_ell_med'):
     """
@@ -255,7 +286,7 @@ def filter_by_quality(valid_files, metadata_map, criteria='sf_ell_med', threshol
                 
     return passed
 
-def get_report_data(args, initial_files, valid_files, metadata_map, flat_files_used):
+def get_report_data(args, initial_files, valid_files, metadata_map, dark_files_used, flat_files_used, meta_warnings, dark_cache, flat_cache):
     """Aggregates all metadata for report generation."""
     import datetime
     
@@ -321,21 +352,59 @@ def get_report_data(args, initial_files, valid_files, metadata_map, flat_files_u
         "light_sessions": ", ".join([str(s) for s in light_sessions if s]),
         "flat_applied": "Enabled" if args.use_flat else "Disabled",
         "flat_folder": args.flat_dir if args.flat_dir else "N/A",
-        "flat_session": args.flat_session if args.flat_session else "N/A"
+        "flat_session": args.flat_session if args.flat_session else "N/A",
+        "dark_applied": "Enabled" if args.use_dark else "Disabled",
+        "dark_folder": args.dark_dir if args.dark_dir else "N/A",
+        "dark_session": args.dark_session if args.dark_session else "N/A",
+        "warnings": meta_warnings
     }
     
     # Used Files
     used_files = {
         "light": [os.path.basename(f) for f in valid_files],
+        "dark": [os.path.basename(f) for f in dark_files_used],
         "flat": [os.path.basename(f) for f in flat_files_used]
     }
     
+    # Extract Calibration Metadata from cache (using first loaded session as representative)
+    d_meta = list(dark_cache.values())[0][1] if dark_cache and list(dark_cache.values())[0][1] else {}
+    f_meta = list(flat_cache.values())[0][1] if flat_cache and list(flat_cache.values())[0][1] else {}
+
+    # Environment Info
+    def env_info(meta):
+        return {
+            "temp_c": get_nested_val(meta, ["record", "environment", "temp_c"], "N/A"),
+            "humidity": get_nested_val(meta, ["record", "environment", "humidity_pct"], "N/A"),
+            "pressure": get_nested_val(meta, ["record", "environment", "pressure_hpa"], "N/A"),
+            "dewpoint": get_nested_val(meta, ["record", "environment", "dew_point_c"], "N/A")
+        }
+    
+    environment = {
+        "light": env_info(ref_entry),
+        "dark": env_info(d_meta) if args.use_dark else {"temp_c":"N/A", "humidity":"N/A", "pressure":"N/A", "dewpoint":"N/A"}
+    }
+    
+    # Calibration Extra Info (ISO, Sub-exposure, Frame count)
+    def cal_extra(meta, used_files):
+        if not used_files: return {"iso": "N/A", "exp": "N/A", "count": 0}
+        iso = get_nested_val(meta, ["record", "exif", "iso"], "N/A")
+        exp = get_nested_val(meta, ["record", "meta", "exposure_actual_sec"], get_nested_val(meta, ["record", "exif", "shutter_sec"], "N/A"))
+        return {"iso": iso, "exp": f"{exp} sec" if exp != "N/A" else "N/A", "count": len(used_files)}
+
+    cal_stats = {
+        "light": cal_extra(ref_entry, valid_files),
+        "dark": cal_extra(d_meta, dark_files_used),
+        "flat": cal_extra(f_meta, flat_files_used)
+    }
+
     return {
         "capture": cap_info,
         "stacking": stack_info,
         "plate_solve": plate_solve,
         "file_info": file_info,
         "used_files": used_files,
+        "environment": environment,
+        "cal_stats": cal_stats,
         "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         "out_file": args.out
     }
@@ -379,6 +448,9 @@ Generated on: {data["out_file"]}
 | **Flat 補正 (Apply)** | {"有効 (Enabled)" if data["file_info"]["flat_applied"] == "Enabled" else "無効 (Disabled)"} |
 | **Flat フォルダ** | {data["file_info"]["flat_folder"]} |
 | **Flat セッション (ID)** | {data["file_info"]["flat_session"]} |
+| **Dark 補正 (Apply)** | {"有効 (Enabled)" if data["file_info"]["dark_applied"] == "Enabled" else "無効 (Disabled)"} |
+| **Dark フォルダ** | {data["file_info"]["dark_folder"]} |
+| **Dark セッション (ID)** | {data["file_info"]["dark_session"]} |
 
 ## 🛰 Plate Solve Results (SSE)
 | 項目 | 値 |
@@ -394,12 +466,24 @@ Generated on: {data["out_file"]}
     for f in data["used_files"]["light"]:
         md_content += f"- {f}\n"
     
+    md_content += f"\n### Dark Frames ({len(data['used_files']['dark'])})\n"
+    if data["used_files"]["dark"]:
+        for f in data["used_files"]["dark"]:
+            md_content += f"- {f}\n"
+    else:
+        md_content += "None\n"
+
     md_content += f"\n### Flat Frames ({len(data['used_files']['flat'])})\n"
     if data["used_files"]["flat"]:
         for f in data["used_files"]["flat"]:
             md_content += f"- {f}\n"
     else:
         md_content += "None\n"
+
+    if data["file_info"]["warnings"]:
+        md_content += "\n### ⚠️ Calibration Warnings\n"
+        for w in data["file_info"]["warnings"]:
+            md_content += f"- {w.strip()}\n"
 
     md_content += f"""
 # EN
@@ -440,12 +524,22 @@ Generated on: {data["out_file"]}
 | **Flat Field Correction** | {data["file_info"]["flat_applied"]} |
 | **Flat Folder** | {data["file_info"]["flat_folder"]} |
 | **Flat Session (ID)** | {data["file_info"]["flat_session"]} |
+| **Dark Field Correction** | {data["file_info"]["dark_applied"]} |
+| **Dark Folder** | {data["file_info"]["dark_folder"]} |
+| **Dark Session (ID)** | {data["file_info"]["dark_session"]} |
 
 ## 📜 Used Files
 ### Light Frames ({len(data['used_files']['light'])})
 """
     for f in data["used_files"]["light"]:
         md_content += f"- {f}\n"
+
+    md_content += f"\n### Dark Frames ({len(data['used_files']['dark'])})\n"
+    if data["used_files"]["dark"]:
+        for f in data["used_files"]["dark"]:
+            md_content += f"- {f}\n"
+    else:
+        md_content += "None\n"
 
     md_content += f"\n### Flat Frames ({len(data['used_files']['flat'])})\n"
     if data["used_files"]["flat"]:
@@ -537,7 +631,13 @@ Generated on: {data["out_file"]}
         is_full = (report_type == "full")
         
         light_files_html = "".join([f"<div>{f}</div>" for f in data["used_files"]["light"]])
+        dark_files_html = "".join([f"<div>{f}</div>" for f in data["used_files"]["dark"]]) if data["used_files"]["dark"] else "None"
         flat_files_html = "".join([f"<div>{f}</div>" for f in data["used_files"]["flat"]]) if data["used_files"]["flat"] else "None"
+        
+        warn_html = ""
+        if data["file_info"]["warnings"]:
+            warn_items = "".join([f"<li>{w.strip()}</li>" for w in data["file_info"]["warnings"]])
+            warn_html = f'<div class="section-title" style="background:#a51515">CALIBRATION WARNINGS</div><ul style="color:#a51515; font-weight:600">{warn_items}</ul>'
         
         html_content = f"""<!DOCTYPE html>
 <html lang="ja">
@@ -589,6 +689,8 @@ Generated on: {data["out_file"]}
     </div>
 """
         if is_full:
+            env = data.get("environment", {})
+            cal = data.get("cal_stats", {})
             html_content += f"""
     <div class="section-title">FILE INFORMATION</div>
     <table>
@@ -597,10 +699,75 @@ Generated on: {data["out_file"]}
         <tr><td class="label">Flat Field Correction (Apply)</td><td class="value">{data["file_info"]["flat_applied"]}</td></tr>
         <tr><td class="label">Flat Folder</td><td class="value">{data["file_info"]["flat_folder"]}</td></tr>
         <tr><td class="label">Flat Session (ID)</td><td class="value">{data["file_info"]["flat_session"]}</td></tr>
+        <tr><td class="label">Dark Field Correction (Apply)</td><td class="value">{data["file_info"]["dark_applied"]}</td></tr>
+        <tr><td class="label">Dark Folder</td><td class="value">{data["file_info"]["dark_folder"]}</td></tr>
+        <tr><td class="label">Dark Session (ID)</td><td class="value">{data["file_info"]["dark_session"]}</td></tr>
+    </table>
+    
+    {warn_html}
+
+    <div class="section-title">CALIBRATION FILE INFORMATION</div>
+    <table class="report-table">
+        <tr>
+            <th>Type</th>
+            <th>ISO</th>
+            <th>Sub-exposure</th>
+            <th>Frames Used</th>
+        </tr>
+        <tr>
+            <td class="label">Light</td>
+            <td class="value">{cal.get('light', {}).get('iso','N/A')}</td>
+            <td class="value">{cal.get('light', {}).get('exp','N/A')}</td>
+            <td class="value">{cal.get('light', {}).get('count',0)}</td>
+        </tr>
+        <tr>
+            <td class="label">Dark</td>
+            <td class="value">{cal.get('dark', {}).get('iso','N/A')}</td>
+            <td class="value">{cal.get('dark', {}).get('exp','N/A')}</td>
+            <td class="value">{cal.get('dark', {}).get('count',0)}</td>
+        </tr>
+        <tr>
+            <td class="label">Flat</td>
+            <td class="value">{cal.get('flat', {}).get('iso','N/A')}</td>
+            <td class="value">{cal.get('flat', {}).get('exp','N/A')}</td>
+            <td class="value">{cal.get('flat', {}).get('count',0)}</td>
+        </tr>
+    </table>
+
+    <div class="section-title">ENVIRONMENTAL INFORMATION</div>
+    <table class="report-table">
+        <tr>
+            <th>Parameter</th>
+            <th>Light Frame</th>
+            <th>Dark Frame</th>
+        </tr>
+        <tr>
+            <td class="label">Temp_Ext_C</td>
+            <td class="value">{env.get('light', {}).get('temp_c','N/A')}</td>
+            <td class="value">{env.get('dark', {}).get('temp_c','N/A')}</td>
+        </tr>
+        <tr>
+            <td class="label">Humidity_pct</td>
+            <td class="value">{env.get('light', {}).get('humidity','N/A')}</td>
+            <td class="value">{env.get('dark', {}).get('humidity','N/A')}</td>
+        </tr>
+        <tr>
+            <td class="label">Pressure_hPa</td>
+            <td class="value">{env.get('light', {}).get('pressure','N/A')}</td>
+            <td class="value">{env.get('dark', {}).get('pressure','N/A')}</td>
+        </tr>
+        <tr>
+            <td class="label">DewPoint_C</td>
+            <td class="value">{env.get('light', {}).get('dewpoint','N/A')}</td>
+            <td class="value">{env.get('dark', {}).get('dewpoint','N/A')}</td>
+        </tr>
     </table>
     
     <div class="section-title">USED LIGHT FRAMES ({len(data['used_files']['light'])})</div>
     <div class="file-list">{light_files_html}</div>
+    <br>
+    <div class="section-title">USED DARK FRAMES ({len(data['used_files']['dark'])})</div>
+    <div class="file-list">{dark_files_html}</div>
     <br>
     <div class="section-title">USED FLAT FRAMES ({len(data['used_files']['flat'])})</div>
     <div class="file-list">{flat_files_html}</div>
@@ -637,11 +804,17 @@ def main():
     parser.add_argument("--limit", type=int, default=conf["limit"], help="Limit number of frames to stack")
     parser.add_argument("--flat_dir", default=conf["flat_dir"], help="Directory containing flat images")
     parser.add_argument("--flat_session", default=conf["flat_session"], help="Force a specific session ID for flats")
+    parser.add_argument("--dark_dir", default=conf["dark_dir"], help="Directory containing dark images")
+    parser.add_argument("--dark_session", default=conf["dark_session"], help="Force a specific session ID for darks")
     
-    # Flat on/off toggle
+    # Calibration on/off toggles
     flat_group = parser.add_mutually_exclusive_group()
-    flat_group.add_argument("--flat", action="store_true", dest="use_flat", default=conf["use_flat"], help="Enable flat correction")
+    flat_group.add_argument("--flat", action="store_true", dest="use_flat", default=conf["use_flat"], help="Enable flat field correction")
     flat_group.add_argument("--no-flat", action="store_false", dest="use_flat", help="Disable flat correction")
+    
+    dark_group = parser.add_mutually_exclusive_group()
+    dark_group.add_argument("--dark", action="store_true", dest="use_dark", default=conf["use_dark"], help="Enable dark frame subtraction")
+    dark_group.add_argument("--no-dark", action="store_false", dest="use_dark", help="Disable dark subtraction")
     
     args = parser.parse_args()
     
@@ -652,6 +825,8 @@ def main():
     args.inputs = [os.path.expanduser(i) for i in args.inputs]
     if args.flat_dir:
         args.flat_dir = os.path.expanduser(args.flat_dir)
+    if args.dark_dir:
+        args.dark_dir = os.path.expanduser(args.dark_dir)
     if args.out_dir:
         args.out_dir = os.path.expanduser(args.out_dir)
 
@@ -710,114 +885,183 @@ def main():
         print("[Error] No frames passed the filter. Try a looser threshold.")
         sys.exit(1)
         
-    # 4. Load & Pre-process flats if requested
-    # We collect all flats per session to support master flat generation
-    flat_inventory = {}
-    if args.flat_dir:
-        flat_log_path = os.path.join(args.flat_dir, "shutter_log.json")
-        if os.path.exists(flat_log_path):
-            print(f"  [Flats] Inventorying flat files from {flat_log_path}...")
+    # 4. Inventory calibration frames (Darks and Flats)
+    def inventory_frames(base_dir, label):
+        inventory = {}
+        if not base_dir:
+            return inventory
+        log_path = os.path.join(base_dir, "shutter_log.json")
+        if os.path.exists(log_path):
+            print(f"  [{label}] Inventorying files from {log_path}...")
             try:
-                with open(flat_log_path, 'r', encoding='utf-8') as f:
-                    f_log = json.load(f)
-                    for entry in f_log:
+                with open(log_path, 'r', encoding='utf-8') as f:
+                    log_data = json.load(f)
+                    for entry in log_data:
                         if "record" in entry and "file" in entry["record"]:
                             s_id = entry.get("session_id")
                             if not s_id: continue
                             f_name = entry["record"]["file"]["name"]
-                            f_path = os.path.abspath(os.path.join(args.flat_dir, f_name))
+                            f_path = os.path.abspath(os.path.join(base_dir, f_name))
                             if os.path.exists(f_path):
-                                if s_id not in flat_inventory:
-                                    flat_inventory[s_id] = []
-                                flat_inventory[s_id].append(f_path)
-                print(f"  [Flats] Found flat frames for {len(flat_inventory)} sessions.")
+                                if s_id not in inventory:
+                                    inventory[s_id] = []
+                                inventory[s_id].append((f_path, entry))
+                print(f"  [{label}] Found frames for {len(inventory)} sessions.")
             except Exception as e:
-                print(f"  [Warning] Failed to read flat log: {e}")
+                print(f"  [Warning] Failed to read {label} log: {e}")
         else:
-            print(f"  [Warning] No shutter_log.json found in {args.flat_dir}")
+            print(f"  [Warning] No shutter_log.json found in {base_dir}")
+        return inventory
 
+    dark_inventory = inventory_frames(args.dark_dir, "Darks")
+    flat_inventory = inventory_frames(args.flat_dir, "Flats")
+
+    dark_cache = {}
     flat_cache = {}
+    dark_files_used = set()
     flat_files_used = set()
+    meta_warnings = []
+
+    def get_and_apply_dark(img, path):
+        if not args.dark_dir or not args.use_dark:
+            return img
+            
+        target_s_id = args.dark_session if args.dark_session else (metadata_map.get(path, {}).get("session_id"))
+        if not target_s_id: return img
+
+        if target_s_id in dark_cache:
+            d_data, d_meta = dark_cache[target_s_id]
+            if d_data is not None:
+                check_meta(path, d_meta, "Dark")
+                return apply_dark(img, d_data)
+            return img
+
+        # Find/Generate Master Dark
+        master_name = f"master_dark_{target_s_id}_{args.mode}.fits"
+        master_path = os.path.join(args.dark_dir, master_name)
+        
+        m_data, m_meta = None, None
+        if os.path.exists(master_path):
+            print(f"  [Darks] Found existing master dark: {master_name}")
+            try:
+                m_data = load_image(master_path, color=args.color)
+                # Master doesn't have its own entry in shutter_log usually, or it's complex.
+                # We'll use the metadata of the first frame in the inventory as representative.
+                if target_s_id in dark_inventory:
+                    m_meta = dark_inventory[target_s_id][0][1]
+            except Exception as e:
+                print(f"  [Error] Failed to load master dark {master_name}: {e}")
+        else:
+            darks_to_stack = dark_inventory.get(target_s_id, [])
+            if darks_to_stack:
+                print(f"  [Darks] Generating master dark for session {target_s_id} ({len(darks_to_stack)} frames)...")
+                try:
+                    with tempfile.TemporaryDirectory() as d_tmp_dir:
+                        npy_paths = []
+                        for i, (f_p, f_m) in enumerate(darks_to_stack):
+                            npy_paths.append(os.path.join(d_tmp_dir, f"dark_{i}.npy"))
+                            np.save(npy_paths[-1], load_image(f_p, color=args.color))
+                            dark_files_used.add(f_p)
+                        m_data = stack_images(npy_paths, method='median')
+                        if m_data is not None:
+                            save_stacked_fits(m_data, master_path)
+                            m_meta = darks_to_stack[0][1]
+                except Exception as e:
+                    print(f"  [Error] Failed to generate master dark: {e}")
+
+        dark_cache[target_s_id] = (m_data, m_meta)
+        if m_data is not None:
+            for d_p, _ in dark_inventory.get(target_s_id, []): dark_files_used.add(d_p)
+            check_meta(path, m_meta, "Dark")
+            return apply_dark(img, m_data)
+        return img
+
+    def check_meta(light_path, cal_meta, label):
+        if not cal_meta: return
+        l_meta = metadata_map.get(light_path)
+        if not l_meta: return
+        
+        # Exposure
+        l_exp = get_nested_val(l_meta, ["record", "meta", "exposure_actual_sec"], get_nested_val(l_meta, ["record", "exif", "shutter_sec"], 0))
+        c_exp = get_nested_val(cal_meta, ["record", "meta", "exposure_actual_sec"], get_nested_val(cal_meta, ["record", "exif", "shutter_sec"], 0))
+        
+        # Temp
+        l_temp = get_nested_val(l_meta, ["record", "environment", "temp_c"])
+        c_temp = get_nested_val(cal_meta, ["record", "environment", "temp_c"])
+
+        # ISO
+        l_iso = get_nested_val(l_meta, ["record", "exif", "iso"])
+        c_iso = get_nested_val(cal_meta, ["record", "exif", "iso"])
+        
+        msg_parts = []
+        if abs(l_exp - c_exp) > 0.1:
+            msg_parts.append(f"Exposure mismatch (Light:{l_exp}s, {label}:{c_exp}s)")
+        if l_temp is not None and c_temp is not None and abs(l_temp - c_temp) > 2.0:
+            msg_parts.append(f"Temperature mismatch (Light:{l_temp}C, {label}:{c_temp}C)")
+        if l_iso is not None and c_iso is not None and l_iso != c_iso:
+            msg_parts.append(f"ISO mismatch (Light:{l_iso}, {label}:{c_iso})")
+            
+        if msg_parts:
+            warn_msg = f"  [Warning] {label} Meta: " + ", ".join(msg_parts)
+            if warn_msg not in meta_warnings:
+                print(warn_msg)
+                meta_warnings.append(warn_msg)
 
     def get_and_apply_flat(img, path):
         if not args.flat_dir or not args.use_flat:
             return img
             
-        # Determine target session ID for flat
-        if args.flat_session:
-            target_s_id = args.flat_session
-        else:
-            entry = metadata_map.get(path)
-            target_s_id = entry.get("session_id") if entry else None
-            
-        if not target_s_id:
-            return img
+        target_s_id = args.flat_session if args.flat_session else (metadata_map.get(path, {}).get("session_id"))
+        if not target_s_id: return img
 
         if target_s_id in flat_cache:
-            f_data = flat_cache[target_s_id]
-            # Track flats that were used (even if from cache)
-            # Note: ideally we track individual files, but since it's a master, 
-            # we consider all frames in that session's inventory as 'used'.
-            for f_p in flat_inventory.get(target_s_id, []):
-                flat_files_used.add(f_p)
+            f_data, f_meta = flat_cache[target_s_id]
+            for f_p, _ in flat_inventory.get(target_s_id, []): flat_files_used.add(f_p)
             return apply_flat(img, f_data, args.color) if f_data is not None else img
 
-        # Try to find or generate master flat
         master_name = f"master_flat_{target_s_id}_{args.mode}.fits"
         master_path = os.path.join(args.flat_dir, master_name)
         
+        f_data, f_meta = None, None
         if os.path.exists(master_path):
             print(f"  [Flats] Found existing master flat: {master_name}")
             try:
                 f_data = load_image(master_path, color=args.color)
-                flat_cache[target_s_id] = f_data
-                for f_p in flat_inventory.get(target_s_id, []):
-                    flat_files_used.add(f_p)
-                return apply_flat(img, f_data, args.color)
+                if target_s_id in flat_inventory:
+                    f_meta = flat_inventory[target_s_id][0][1]
             except Exception as e:
-                print(f"  [Error] Failed to load master flat {master_name}: {e}")
-                flat_cache[target_s_id] = None
-                return img
+                print(f"  [Error] Failed to load master flat: {e}")
+        else:
+            flats_to_stack = flat_inventory.get(target_s_id, [])
+            if flats_to_stack:
+                print(f"  [Flats] Generating master flat for session {target_s_id} ({len(flats_to_stack)} frames)...")
+                try:
+                    with tempfile.TemporaryDirectory() as f_tmp_dir:
+                        npy_paths = []
+                        for i, (f_p, _) in enumerate(flats_to_stack):
+                            npy_paths.append(os.path.join(f_tmp_dir, f"flat_{i}.npy"))
+                            np.save(npy_paths[-1], load_image(f_p, color=args.color))
+                            flat_files_used.add(f_p)
+                        f_data = stack_images(npy_paths, method='median')
+                        if f_data is not None:
+                            save_stacked_fits(f_data, master_path)
+                            f_meta = flats_to_stack[0][1]
+                except Exception as e:
+                    print(f"  [Error] Failed to generate master flat: {e}")
 
-        # Generate new master flat if multiple frames are available
-        flats_to_process = flat_inventory.get(target_s_id, [])
-        if not flats_to_process:
-            if target_s_id not in flat_cache:
-                print(f"  [Warning] No flat frames found for session: {target_s_id}")
-                flat_cache[target_s_id] = None
-            return img
-
-        print(f"  [Flats] Generating master flat for session {target_s_id} ({len(flats_to_process)} frames)...")
-        try:
-            with tempfile.TemporaryDirectory() as flat_tmp_dir:
-                npy_paths = []
-                for i, f_p in enumerate(flats_to_process):
-                    f_img = load_image(f_p, color=args.color)
-                    tmp_npy = os.path.join(flat_tmp_dir, f"flat_{i}.npy")
-                    np.save(tmp_npy, f_img)
-                    npy_paths.append(tmp_npy)
-                    flat_files_used.add(f_p)
-                
-                # Stack without registration for flats
-                master_f_data = stack_images(npy_paths, method='median')
-                if master_f_data is not None:
-                    save_stacked_fits(master_f_data, master_path)
-                    print(f"  [Flats] Saved new master flat: {master_name}")
-                    flat_cache[target_s_id] = master_f_data
-                    return apply_flat(img, master_f_data, args.color)
-                else:
-                    flat_cache[target_s_id] = None
-                    return img
-        except Exception as e:
-            print(f"  [Error] Failed to generate master flat for session {target_s_id}: {e}")
-            flat_cache[target_s_id] = None
-            return img
+        flat_cache[target_s_id] = (f_data, f_meta)
+        if f_data is not None:
+            for f_p, _ in flat_inventory.get(target_s_id, []): flat_files_used.add(f_p)
+            return apply_flat(img, f_data, args.color)
+        return img
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         print(f"  [Processing] Initializing stack with {len(valid_files)} frames...")
         
         # Reference is loaded in requested mode
         ref_data = load_image(ref_path, color=args.color)
+        # Calibration sequence for reference
+        ref_data = get_and_apply_dark(ref_data, ref_path)
         ref_data = get_and_apply_flat(ref_data, ref_path)
         
         # Save reference to disk
@@ -836,6 +1080,8 @@ def main():
             
             try:
                 img_data = load_image(f_path, color=args.color)
+                # Calibration sequence: 1. Dark, 2. Flat
+                img_data = get_and_apply_dark(img_data, f_path)
                 img_data = get_and_apply_flat(img_data, f_path)
                 aligned, _ = register_images(ref_data, img_data)
                 
@@ -847,6 +1093,14 @@ def main():
                     count += 1
                 else:
                     print(f"  [Skip] Alignment failed for: {f_name}")
+                
+                # Proactively clean up heavy structures immediately
+                del img_data
+                if 'aligned' in locals():
+                    del aligned
+                import gc
+                gc.collect()
+                    
             except Exception as e:
                 print(f"  [Error] Failed to process {f_name}: {e}")
                 
@@ -856,12 +1110,18 @@ def main():
         
         if master_frame is not None:
             save_stacked_fits(master_frame, args.out)
+            
+            # Explicitly free huge memory block immediately
+            del master_frame
+            import gc
+            gc.collect()
+            
             print(f"Success! Saved to: {args.out}")
             
             # --- Report Generation ---
             print("  [Report] Generating session reports...")
             try:
-                report_data = get_report_data(args, initial_files, valid_files, metadata_map, list(flat_files_used))
+                report_data = get_report_data(args, initial_files, valid_files, metadata_map, list(dark_files_used), list(flat_files_used), meta_warnings, dark_cache, flat_cache)
                 generate_reports(report_data)
             except Exception as e:
                 print(f"  [Error] Report generation failed: {e}")
