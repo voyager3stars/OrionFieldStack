@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-LogHarmonizer1_6 v1.6.3
+LogHarmonizer1_6 v1.6.4
 Bidirectional synchronization between shutter_log.csv and shutter_log.json.
 Modes: [c2j] CSV to JSON (Default), [j2c] JSON to CSV.
 Precision synchronization with ShutterPro03, SSE, and StarFlux (v1.6.2 Spec).
@@ -157,6 +157,24 @@ class LogHarmonizer:
             print(f"Error: Edit CSV not found at {self.edit_csv_path}")
             return []
         rows = []
+        
+        legacy_map = {
+            "ISO_Timestamp": "LocalTime",
+            "Timestamp_UTC": "UTC_Time",
+            "Actual_Exp_sec": "Sf_Exp_t",
+            "Exp_Diff_sec": "Diff Sf-Exif",
+            "Shot_Mode": "Mode",
+            "Frame_Type": "Type",
+            "File_Name": "Filename",
+            "ISO": "ISO_Exif",
+            "Shutter_sec": "Exposure_Exif",
+            "RA_deg": "RA",
+            "Dec_deg": "DEC",
+            "Mount_Status": "MT_Status",
+            "Side_Of_Pier": "Side",
+            "LST_HMS": "LST"
+        }
+        
         with open(self.edit_csv_path, 'r', encoding='utf-8-sig') as f: # Use utf-8-sig to handle BOM
             lines = f.readlines()
             # Find the header line (first line without #)
@@ -172,7 +190,14 @@ class LogHarmonizer:
                 
             reader = csv.DictReader(f)
             for row in reader:
-                rows.append(row)
+                mapped_row = {}
+                for k, v in row.items():
+                    # If old key, map to new key
+                    if k in legacy_map:
+                        mapped_row[legacy_map[k]] = v
+                    else:
+                        mapped_row[k] = v
+                rows.append(mapped_row)
         return rows
 
     def get_key(self, record):
@@ -217,7 +242,7 @@ class LogHarmonizer:
         mode_desc = "[CSV -> JSON] Sync Edit to Master" if mode == "c2j" else "[JSON -> CSV] Export Master to Edit"
         
         print("\n" + "="*50)
-        print(f"  LogHarmonizer1_6 v1.6.2")
+        print(f"  LogHarmonizer1_6 v1.6.4")
         print("="*50)
         print(f"  Mode:   {mode_desc}")
         print(f"  Source: {source}")
@@ -432,7 +457,7 @@ class LogHarmonizer:
         print(f"CSV exported successfully with {len(json_data)} records.")
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="LogHarmonizer1_6 v1.6.2")
+    parser = argparse.ArgumentParser(description="LogHarmonizer1_6 v1.6.4")
     parser.add_argument("-m", "--mode", choices=["c2j", "j2c"], default="c2j", 
                         help="Mode: c2j (CSV to JSON, default), j2c (JSON to CSV)")
     parser.add_argument("--config", default="config.json", help="Path to config file")
