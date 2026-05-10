@@ -10,7 +10,7 @@
 #   - ポスト処理中の latest_shot.json 汚染を防止。
 # =================================================================
 
-__version__ = "2.2.3"
+__version__ = "2.2.4"
 __json_spec__ = "1.6.2"
 
 import os
@@ -216,11 +216,45 @@ class SkySolverEngine:
         target_dict["analysis"]["SSE"] = sse_data
 
     def _update_csv_file(self, filepath, target_filename, res):
-        """Streaming update for CSV."""
+        """Streaming update for CSV with forced v1.6.2 layout."""
         temp_fd, temp_path = tempfile.mkstemp(dir=os.path.dirname(filepath), prefix="sse_tmp_", suffix=".csv")
         try:
             seen_comments = set()
-            new_cols = ["Solve_Status", "Solve_Confidence", "Matched_Stars", "Solve_Time_sec", "Solve_Path", "Solve_Orientation", "Solve_RA", "Solve_DEC", "Solve_RA_hms", "Solve_DEC_dms", "SSE_Version", "Solve_Timestamp"]
+            master_header = [
+                "JSON_ver", "Session_ID", "Objective", "Telescope", "Opt", "Filter", 
+                "Camera", "Aperture", "Focal_L", "F_num", "Pixel_Size", "Pixel_Scale",
+                "LocalTime", "UTC_Time", "UTC_Offset", "LST", "UnixTime", "Sf_Exp_t", 
+                "Diff Sf-Exif", "Mode", "Type", "Filename", "SavedDir", "Format", 
+                "FileSize", "Width", "Height", "ISO_Exif", "Exposure_Exif", 
+                "DateTime_Exif", "Model", "Lat_Exif", "Lon_Exif", "Alt_Exif",
+                "RA", "DEC", "RA_HMS", "DEC_DMS", "MT_Status", "Side", "HourAngle",
+                "Site_Name", "Lat_INDI", "Lon_INDI", "Alt_INDI", "TZ_Source",
+                "Temp_Ext_C", "Humidity_pct", "Pressure_hPa", "DewPoint_C", 
+                "Mnt_CPU_Temp_C", "RPi_CPU_Temp_C", "SSE_Version", "Solve_Status", 
+                "Solve_Path", "Solve_Confidence", "Solve_Timestamp", "Solve_RA", 
+                "Solve_DEC", "Solve_Orientation", "Solve_RA_hms", "Solve_DEC_dms", 
+                "Matched_Stars", "Solve_Time_sec", "SF_version", "SF_status", 
+                "SF_timestamp", "SF_stars", "SF_fwhm_med", "SF_fwhm_mean", 
+                "SF_fwhm_std", "SF_ell_med", "SF_ell_mean", "SF_ell_std"
+            ]
+            
+            # Legacy column mapping for older CSVs
+            legacy_map = {
+                "ISO_Timestamp": "LocalTime",
+                "Timestamp_UTC": "UTC_Time",
+                "Actual_Exp_sec": "Sf_Exp_t",
+                "Exp_Diff_sec": "Diff Sf-Exif",
+                "Shot_Mode": "Mode",
+                "Frame_Type": "Type",
+                "File_Name": "Filename",
+                "ISO": "ISO_Exif",
+                "Shutter_sec": "Exposure_Exif",
+                "RA_deg": "RA",
+                "Dec_deg": "DEC",
+                "Mount_Status": "MT_Status",
+                "Side_Of_Pier": "Side",
+                "LST_HMS": "LST"
+            }
             
             with open(filepath, 'r', encoding='utf-8-sig', newline='') as f_in, \
                  os.fdopen(temp_fd, 'w', encoding='utf-8-sig', newline='') as f_out:
@@ -245,34 +279,38 @@ class SkySolverEngine:
                     return
 
                 reader = csv.DictReader([header_line])
-                fieldnames = list(reader.fieldnames) if reader.fieldnames else []
-                fieldnames = [f for f in fieldnames if f] 
+                actual_reader = csv.DictReader(f_in, fieldnames=reader.fieldnames)
                 
-                for col in new_cols:
-                    if col not in fieldnames: fieldnames.append(col)
-                
-                writer = csv.DictWriter(f_out, fieldnames=fieldnames, extrasaction='ignore')
+                writer = csv.DictWriter(f_out, fieldnames=master_header, extrasaction='ignore')
                 writer.writeheader()
                 
-                actual_reader = csv.DictReader(f_in, fieldnames=reader.fieldnames)
                 for row in actual_reader:
-                    csv_filename = row.get("File_Name", row.get("Filename", ""))
+                    new_row = {col: row.get(col, "") for col in master_header}
+                    
+                    # Apply legacy mapping if needed
+                    for old_k, new_k in legacy_map.items():
+                        if old_k in row and not new_row.get(new_k):
+                            new_row[new_k] = row[old_k]
+                            
+                    csv_filename = new_row.get("Filename", "")
+                    
                     if csv_filename and (csv_filename == target_filename or csv_filename in target_filename):
-                        row["Solve_Status"] = "success" if res["success"] else "failed"
-                        row["Solve_Path"] = res.get("solve_path", "N/A")
-                        row["Solve_Time_sec"] = str(res.get("duration", 0.0))
-                        row["Solve_Confidence"] = f"{res.get('confidence', 0.0):.2f}"
-                        row["SSE_Version"] = __version__
-                        row["Solve_Timestamp"] = res.get("timestamp", "")
+                        new_row["Solve_Status"] = "success" if res["success"] else "failed"
+                        new_row["Solve_Path"] = res.get("solve_path", "N/A")
+                        new_row["Solve_Time_sec"] = str(res.get("duration", 0.0))
+                        new_row["Solve_Confidence"] = f"{res.get('confidence', 0.0):.2f}"
+                        new_row["SSE_Version"] = __version__
+                        new_row["Solve_Timestamp"] = res.get("timestamp", "")
                         if res["success"]:
-                            row["Solve_RA"] = f"{res['ra']:.8f}"
-                            row["Solve_DEC"] = f"{res['dec']:.8f}"
-                            row["Solve_RA_hms"] = self.deg_to_hms(res['ra'])
-                            row["Solve_DEC_dms"] = self.deg_to_dms(res['dec'])
-                            row["Matched_Stars"] = str(res.get("stars", ""))
+                            new_row["Solve_RA"] = f"{res['ra']:.8f}"
+                            new_row["Solve_DEC"] = f"{res['dec']:.8f}"
+                            new_row["Solve_RA_hms"] = self.deg_to_hms(res['ra'])
+                            new_row["Solve_DEC_dms"] = self.deg_to_dms(res['dec'])
+                            new_row["Matched_Stars"] = str(res.get("stars", ""))
                             orient = res.get("orientation")
-                            row["Solve_Orientation"] = f"{orient:.2f}" if orient is not None else "0.00"
-                    writer.writerow(row)
+                            new_row["Solve_Orientation"] = f"{orient:.2f}" if orient is not None else "0.00"
+                    
+                    writer.writerow(new_row)
             
             os.replace(temp_path, filepath)
         except Exception as e:

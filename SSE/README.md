@@ -1,4 +1,4 @@
-# SkySolverEngine (SSE) v2.1.0
+# SkySolverEngine (SSE) v2.2.4
 
 **High-Speed Plate Solving & Log Enricher**
 
