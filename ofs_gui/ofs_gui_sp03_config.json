@@ -1,0 +1,19 @@
+{
+    "shots": "3",
+    "mode": "bulb",
+    "exposure": "20",
+    "objective": "M42 Orion Nebula",
+    "frame_type_select": "test",
+    "frame_type": "test",
+    "save_dir": "~/Pictures_test2",
+    "telescope": "Vixen R200SS",
+    "camera": "PENTAX K-1 Mark II",
+    "optics": "Telescope Corrector PH",
+    "filter": "N/A",
+    "focal": "760",
+    "session": "def",
+    "mount": "LX200 OnStep",
+    "weather": "LX200 OnStep",
+    "display": "full",
+    "log_dest": "s2save"
+}

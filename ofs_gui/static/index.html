@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OrionFieldStack Control Panel</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=JetBrains+Mono&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="header-main">
+                <h1>OrionFieldStack <span class="v-tag">v1.4.1</span></h1>
+                <nav class="tabs">
+                    <button class="tab-btn active" data-tab="shutter">SHUTTER</button>
+                    <button class="tab-btn" data-tab="logdata">LOGDATA</button>
+                </nav>
+            </div>
+            <div id="connection-status" class="status-idle">SYSTEM IDLE</div>
+        </header>
+
+        <main>
+            <!-- SHUTTER TAB -->
+            <div id="shutter-tab" class="tab-panel active">
+                <div class="shutter-layout">
+                    <section class="control-panel">
+                        <form id="shutter-form">
+                            <!-- Common Settings -->
+                            <div class="card">
+                                <h2>Common Settings</h2>
+                                <div class="form-grid">
+                                    <div class="form-group">
+                                        <label for="shots">Shots</label>
+                                        <input type="number" id="shots" name="shots" value="10" min="0">
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="mode">Mode</label>
+                                        <select id="mode" name="mode">
+                                            <option value="camera">Camera</option>
+                                            <option value="bulb">Bulb</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="exposure">Exposure (sec)</label>
+                                        <input type="number" id="exposure" name="exposure" value="30.0" step="0.1">
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="objective">Objective</label>
+                                        <input type="text" id="objective" name="objective" value="M42 Orion Nebula">
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="frame_type_select">Frame Type</label>
+                                        <select id="frame_type_select">
+                                            <option value="test">test</option>
+                                            <option value="light">light</option>
+                                            <option value="dark">dark</option>
+                                            <option value="flat">flat</option>
+                                            <option value="bias">bias</option>
+                                            <option value="custom">Other...</option>
+                                        </select>
+                                        <input type="text" id="frame_type" name="frame_type" value="test" class="hidden" style="margin-top: 5px;">
+                                    </div>
+                                    <div class="form-group full-width">
+                                        <label for="save_dir">Save Directory</label>
+                                        <div class="input-with-button">
+                                            <input type="text" id="save_dir" name="save_dir" value="~/Pictures">
+                                            <button type="button" id="browse-dir-btn" class="btn-small">Browse</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Advanced Toggle -->
+                            <div class="advanced-header">
+                                <button type="button" id="toggle-advanced" class="btn-toggle">
+                                    <span>Advanced Settings</span>
+                                    <span class="icon">▾</span>
+                                </button>
+                            </div>
+
+                            <!-- Advanced Settings Section -->
+                            <div id="advanced-settings" class="advanced-panel">
+                                <div class="card">
+                                    <h3>Equipment Details</h3>
+                                    <div class="form-grid">
+                                        <div class="form-group">
+                                            <label for="telescope">Telescope</label>
+                                            <input type="text" id="telescope" name="telescope">
+                                        </div>
+                                        <div class="form-group">
+                                            <label for="camera">Camera</label>
+                                            <input type="text" id="camera" name="camera">
+                                        </div>
+                                        <div class="form-group">
+                                            <label for="optics">Optics</label>
+                                            <input type="text" id="optics" name="optics">
+                                        </div>
+                                        <div class="form-group">
+                                            <label for="filter">Filter</label>
+                                            <input type="text" id="filter" name="filter">
+                                        </div>
+                                        <div class="form-group">
+                                            <label for="focal">Focal Length (mm)</label>
+                                            <input type="number" id="focal" name="focal">
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="card">
+                                    <h3>Hardware & Network</h3>
+                                    <div class="form-grid">
+                                        <div class="form-group">
+                                            <label for="session">Session ID (def = auto)</label>
+                                            <input type="text" id="session" name="session" value="def">
+                                        </div>
+                                        <div class="form-group">
+                                            <label for="mount">INDI Mount Device</label>
+                                            <input type="text" id="mount" name="mount">
+                                        </div>
+                                        <div class="form-group">
+                                            <label for="weather">INDI Weather Device</label>
+                                            <input type="text" id="weather" name="weather">
+                                        </div>
+                                        <div class="form-group">
+                                            <label for="display">Display Mode</label>
+                                            <select id="display" name="display">
+                                                <option value="full">Full</option>
+                                                <option value="simple">Simple</option>
+                                                <option value="off">Off</option>
+                                            </select>
+                                        </div>
+                                        <div class="form-group">
+                                            <label for="log_dest">Log Dest</label>
+                                            <input type="text" id="log_dest" name="log_dest">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="actions">
+                                <button type="submit" id="start-btn" class="btn-primary">START SESSION</button>
+                                <button type="button" id="save-default-btn" class="btn-secondary">Save as Default</button>
+                                <button type="button" id="stop-btn" class="btn-danger" disabled>ABORT</button>
+                            </div>
+                        </form>
+                    </section>
+
+                    <section class="log-panel">
+                        <div class="status-dashboard card">
+                            <div class="dashboard-header">
+                                <h3>Live Status</h3>
+                                <span id="stat-label" class="badge idle">IDLE</span>
+                            </div>
+                            <div class="dashboard-grid">
+                                <div class="stat-item">
+                                    <span class="stat-label">TARGET</span>
+                                    <span id="stat-target" class="stat-value">N/A</span>
+                                </div>
+                                <div class="stat-item">
+                                    <span class="stat-label">PROGRESS</span>
+                                    <span id="stat-shots" class="stat-value">-- / --</span>
+                                </div>
+                                <div class="stat-item">
+                                    <span class="stat-label">MODE</span>
+                                    <span id="stat-mode" class="stat-value">N/A</span>
+                                </div>
+                            </div>
+                            <div class="progress-container">
+                                <div id="progress-bar" class="progress-bar" style="width: 0%"></div>
+                            </div>
+                        </div>
+                        <div class="terminal-header">
+                            <span>LIVE LOG CONSOLE</span>
+                            <button type="button" id="clear-log">Clear</button>
+                        </div>
+                        <div id="terminal" class="terminal-body">
+                            <div class="log-line system">Waiting for connection...</div>
+                        </div>
+                    </section>
+                </div>
+            </div>
+
+            <!-- LOGDATA TAB -->
+            <div id="logdata-tab" class="tab-panel">
+                <div class="logdata-layout-3col">
+                    <!-- Column 1: Sessions -->
+                    <aside class="col-sessions">
+                        <div class="col-header-rich">
+                            <div class="input-with-button">
+                                <input type="text" id="log-path" value="../shutterpro03" placeholder="Log Folder">
+                                <button type="button" id="browse-log-path-btn" class="btn-small">Browse</button>
+                            </div>
+                            <button type="button" id="load-logs-btn" class="btn-primary-small">Load Logs</button>
+                        </div>
+                        
+                        <!-- SSE Runner controls -->
+                        <div class="sse-controls-section">
+                            <h3 class="sse-title">SkySolverEngine (SSE)</h3>
+                            <div class="sse-form">
+                                <div class="form-group-compact">
+                                    <label for="sse-target">Target</label>
+                                    <select id="sse-target">
+                                        <option value="folder">Entire Folder</option>
+                                        <option value="session" id="sse-target-session-opt" disabled>Selected Session</option>
+                                        <option value="file" id="sse-target-file-opt" disabled>Selected File</option>
+                                    </select>
+                                </div>
+                                <div class="sse-options">
+                                    <label class="checkbox-container">
+                                        <input type="checkbox" id="sse-allsky">
+                                        AllSky
+                                    </label>
+                                    <label class="checkbox-container">
+                                        <input type="checkbox" id="sse-force">
+                                        Force
+                                    </label>
+                                </div>
+                                <div class="sse-actions">
+                                    <button type="button" id="sse-run-btn" class="btn-primary-small">RUN SSE</button>
+                                    <button type="button" id="sse-stop-btn" class="btn-danger-small" disabled>STOP</button>
+                                </div>
+                                 
+                                <!-- Active Status Indicator -->
+                                <div id="sse-status-bar" class="sse-status-bar hidden">
+                                    <div class="sse-status-main">
+                                        <span class="sse-spinner"></span>
+                                        <span id="sse-status-text">SSE Running...</span>
+                                    </div>
+                                    <div id="sse-status-file" class="sse-status-file"></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="list-title">Sessions</div>
+                        <div id="session-list" class="list-container">
+                            <div class="placeholder">Load folder to browse</div>
+                        </div>
+                    </aside>
+
+                    <!-- Column 2: Files -->
+                    <aside class="col-files">
+                        <div class="list-title">Files</div>
+                        <div id="file-list" class="list-container">
+                            <div class="placeholder">Select a session</div>
+                        </div>
+                    </aside>
+
+                    <!-- Column 3: Details -->
+                    <section class="col-details">
+                        <div id="log-detail-placeholder" class="detail-placeholder">
+                            Select a file to view details
+                        </div>
+                        <div id="log-content" class="log-content hidden">
+                            <div class="preview-card">
+                                <h3>Image Preview</h3>
+                                <div id="image-preview-container" class="image-container zoomable">
+                                    <div class="no-preview">No Preview Available</div>
+                                </div>
+                                <div id="image-info" class="image-info"></div>
+                            </div>
+                            <div class="metadata-card">
+                                <h3>Metadata Details</h3>
+                                <div class="metadata-tabs">
+                                    <button type="button" class="meta-tab-btn active" data-meta="table">Table</button>
+                                    <button type="button" class="meta-tab-btn" data-meta="json">Raw JSON</button>
+                                </div>
+                                <div id="meta-table-view" class="meta-panel active">
+                                    <table id="metadata-table"></table>
+                                </div>
+                                <div id="meta-json-view" class="meta-panel">
+                                    <pre id="metadata-json"></pre>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Folder Picker Modal -->
+    <div id="folder-picker-modal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Select Directory</h3>
+                <button type="button" id="close-picker-btn" class="close-btn">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="path-nav">
+                    <button type="button" id="picker-up-btn" class="btn-small">UP</button>
+                    <div id="picker-current-path" class="current-path">/home/mtorig</div>
+                </div>
+                <div id="picker-list" class="folder-list"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" id="confirm-picker-btn" class="btn-primary">Select This Folder</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- SSE Console Modal -->
+    <div id="sse-console-modal" class="modal hidden">
+        <div class="modal-content" style="max-width: 800px; width: 95%; height: 80vh;">
+            <div class="modal-header">
+                <h3>SkySolverEngine (SSE) Console</h3>
+                <button type="button" id="close-sse-modal-btn" class="close-btn">&times;</button>
+            </div>
+            <div class="modal-body" style="display: flex; flex-direction: column; height: calc(100% - 130px); padding: 0;">
+                <div id="sse-terminal" class="terminal-body" style="flex-grow: 1; border-radius: 0; border: none; font-size: 0.75rem;">
+                    <div class="log-line system">Waiting for SSE run...</div>
+                </div>
+            </div>
+            <div class="modal-footer" style="padding: 1rem; border-top: 1px solid var(--glass-border); display: flex; justify-content: space-between; align-items: center;">
+                <span id="sse-modal-status" style="font-size: 0.8rem; color: var(--accent-gold);">Idle</span>
+                <button type="button" id="sse-modal-close-btn" class="btn-small">Close Window</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Image Zoom Modal -->
+    <div id="image-modal" class="modal hidden">
+        <div id="image-modal-overlay" class="modal-overlay"></div>
+        <div class="image-modal-content">
+            <img id="enlarged-image" src="">
+            <button type="button" id="close-image-modal" class="close-btn-float">&times;</button>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>

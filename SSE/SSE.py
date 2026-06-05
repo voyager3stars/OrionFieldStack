@@ -10,7 +10,7 @@
 #   - ポスト処理中の latest_shot.json 汚染を防止。
 # =================================================================
 
-__version__ = "2.2.4"
+__version__ = "2.2.5"
 __json_spec__ = "1.6.2"
 
 import os
@@ -97,18 +97,22 @@ class SkySolverEngine:
         hint_args = ["--ra", str(ra_hint), "--dec", str(dec_hint), "--radius", "10.0"] if ra_hint is not None else []
 
         if hint_args:
-            res = try_solve("Pass 1", sigma=30, ds=4, extra_args=hint_args + ["--objs", "100"])
+            res = try_solve("Pass 1", sigma=30, ds=4, extra_args=hint_args + ["--objs", "100"], timeout=25)
             if not res["success"]:
-                res = try_solve("Pass 2", sigma=15, ds=4, extra_args=hint_args + ["--objs", "100"])
+                res = try_solve("Pass 2", sigma=15, ds=4, extra_args=hint_args + ["--objs", "150"], timeout=25)
             if not res["success"]:
-                res = try_solve("Pass 3", sigma=10, ds=4, extra_args=hint_args + ["--objs", "150"])
+                res = try_solve("Pass 3", sigma=10, ds=4, extra_args=hint_args + ["--objs", "300"], timeout=30)
+            if not res["success"]:
+                res = try_solve("Pass 4", sigma=5, ds=4, extra_args=hint_args + ["--objs", "500"], timeout=30)
 
         if not res["success"] and self.all_sky_enabled:
-            res = try_solve("Pass 4", sigma=30, ds=4, extra_args=["--objs", "100"], timeout=45)
+            res = try_solve("AllSky 1", sigma=30, ds=4, extra_args=["--objs", "100"], timeout=45)
             if not res["success"]:
-                res = try_solve("Pass 5", sigma=15, ds=4, extra_args=["--objs", "100"], timeout=45)
+                res = try_solve("AllSky 2", sigma=15, ds=4, extra_args=["--objs", "150"], timeout=45)
             if not res["success"]:
-                res = try_solve("Pass 6", sigma=10, ds=4, extra_args=["--objs", "100"], timeout=45)
+                res = try_solve("AllSky 3", sigma=10, ds=4, extra_args=["--objs", "300"], timeout=60)
+            if not res["success"]:
+                res = try_solve("AllSky 4", sigma=5, ds=4, extra_args=["--objs", "500"], timeout=60)
 
         res["duration"] = round(time.time() - start_time, 2)
         res["timestamp"] = timestamp
@@ -386,6 +390,7 @@ def main():
     parser.add_argument('target', nargs='?')
     parser.add_argument('--allsky', action='store_true')
     parser.add_argument('--force', action='store_true')
+    parser.add_argument('--session', help='Filter by Session ID')
     args = parser.parse_args()
     sse = SkySolverEngine(all_sky_enabled=args.allsky, force_mode=args.force)
 
@@ -393,9 +398,28 @@ def main():
         if args.mode == 'select' and args.target:
             t = os.path.abspath(os.path.expanduser(args.target))
             if os.path.isdir(t):
+                allowed_files = None
+                if args.session:
+                    allowed_files = set()
+                    log_path = os.path.join(t, "shutter_log.json")
+                    if os.path.exists(log_path):
+                        try:
+                            with open(log_path, 'r', encoding='utf-8') as f:
+                                for r in json.load(f):
+                                    if r.get("session_id") == args.session:
+                                        name = r.get("record", {}).get("file", {}).get("name")
+                                        if name:
+                                            allowed_files.add(name)
+                        except Exception as e:
+                            print(f"SSE>> [Warning] Failed to read shutter_log.json for session filter: {e}")
+                
                 files = sorted([f for f in os.listdir(t) if f.lower().endswith(('.dng', '.raw'))])
-                for f in files: sse.process_target(os.path.join(t, f))
-            else: sse.process_target(t)
+                for f in files:
+                    if allowed_files is not None and f not in allowed_files:
+                        continue
+                    sse.process_target(os.path.join(t, f))
+            else:
+                sse.process_target(t)
         elif args.mode == 'latest' and args.target:
             sse.process_latest(os.path.abspath(os.path.expanduser(args.target)))
     except KeyboardInterrupt:
