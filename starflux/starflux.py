@@ -2,7 +2,7 @@
 # =================================================================
 # Project:      OrionFieldStack
 # Component:    StarFlux
-# Version:      1.2.0
+# Version:      1.3.1
 # Author:       Antigravity (Coding Assistant)
 # Description:  
 #   天体画像の品質評価プログラム。
@@ -21,7 +21,7 @@ from astropy.io import fits
 from astropy.stats import sigma_clipped_stats
 from photutils.detection import DAOStarFinder
 
-__version__ = "1.3.1"
+__version__ = "1.3.2"
 
 def load_image(file_path):
     """
@@ -187,6 +187,7 @@ def update_shutter_log(img_path, report):
 def update_csv_log(img_path, report):
     """
     shutter_log.csv を探し、解析結果を書き込む (Atomic & Streaming 処理版)
+    v1.6.2仕様に強制フォーマット
     """
     img_dir = os.path.dirname(os.path.abspath(img_path))
     img_name = os.path.basename(img_path)
@@ -199,11 +200,40 @@ def update_csv_log(img_path, report):
     try:
         updated = False
         seen_comments = set()
-        SF_headers = [
-            "SF_stars", "SF_fwhm_med", "SF_fwhm_mean", "SF_fwhm_std",
-            "SF_ell_med", "SF_ell_mean", "SF_ell_std", "SF_status",
-            "SF_timestamp", "SF_version"
+        master_header = [
+            "JSON_ver", "Session_ID", "Objective", "Telescope", "Opt", "Filter", 
+            "Camera", "Aperture", "Focal_L", "F_num", "Pixel_Size", "Pixel_Scale",
+            "LocalTime", "UTC_Time", "UTC_Offset", "LST", "UnixTime", "Sf_Exp_t", 
+            "Diff Sf-Exif", "Mode", "Type", "Filename", "SavedDir", "Format", 
+            "FileSize", "Width", "Height", "ISO_Exif", "Exposure_Exif", 
+            "DateTime_Exif", "Model", "Lat_Exif", "Lon_Exif", "Alt_Exif",
+            "RA", "DEC", "RA_HMS", "DEC_DMS", "MT_Status", "Side", "HourAngle",
+            "Site_Name", "Lat_INDI", "Lon_INDI", "Alt_INDI", "TZ_Source",
+            "Temp_Ext_C", "Humidity_pct", "Pressure_hPa", "DewPoint_C", 
+            "Mnt_CPU_Temp_C", "RPi_CPU_Temp_C", "SSE_Version", "Solve_Status", 
+            "Solve_Path", "Solve_Confidence", "Solve_Timestamp", "Solve_RA", 
+            "Solve_DEC", "Solve_Orientation", "Solve_RA_hms", "Solve_DEC_dms", 
+            "Matched_Stars", "Solve_Time_sec", "SF_version", "SF_status", 
+            "SF_timestamp", "SF_stars", "SF_fwhm_med", "SF_fwhm_mean", 
+            "SF_fwhm_std", "SF_ell_med", "SF_ell_mean", "SF_ell_std"
         ]
+        
+        legacy_map = {
+            "ISO_Timestamp": "LocalTime",
+            "Timestamp_UTC": "UTC_Time",
+            "Actual_Exp_sec": "Sf_Exp_t",
+            "Exp_Diff_sec": "Diff Sf-Exif",
+            "Shot_Mode": "Mode",
+            "Frame_Type": "Type",
+            "File_Name": "Filename",
+            "ISO": "ISO_Exif",
+            "Shutter_sec": "Exposure_Exif",
+            "RA_deg": "RA",
+            "Dec_deg": "DEC",
+            "Mount_Status": "MT_Status",
+            "Side_Of_Pier": "Side",
+            "LST_HMS": "LST"
+        }
 
         with open(log_path, 'r', encoding='utf-8-sig', newline='') as f_in, \
              os.fdopen(temp_fd, 'w', encoding='utf-8-sig', newline='') as f_out:
@@ -228,42 +258,43 @@ def update_csv_log(img_path, report):
                 return False
 
             reader = csv.DictReader([header_line])
-            fieldnames = list(reader.fieldnames) if reader.fieldnames else []
-            fieldnames = [f for f in fieldnames if f]
+            actual_reader = csv.DictReader(f_in, fieldnames=reader.fieldnames)
             
-            for h in SF_headers:
-                if h not in fieldnames:
-                    fieldnames.append(h)
-
-            writer = csv.DictWriter(f_out, fieldnames=fieldnames, extrasaction='ignore')
+            writer = csv.DictWriter(f_out, fieldnames=master_header, extrasaction='ignore')
             writer.writeheader()
             
-            actual_reader = csv.DictReader(f_in, fieldnames=reader.fieldnames)
             for row in actual_reader:
-                csv_filename = row.get("File_Name", row.get("Filename", ""))
+                new_row = {col: row.get(col, "") for col in master_header}
+                
+                for old_k, new_k in legacy_map.items():
+                    if old_k in row and not new_row.get(new_k):
+                        new_row[new_k] = row[old_k]
+                        
+                csv_filename = new_row.get("Filename", "")
+                
                 if csv_filename and (csv_filename == img_name or csv_filename in img_name):
                     if report.get("success"):
-                        row["SF_stars"]     = str(report["stars_analyzed"])
-                        row["SF_fwhm_med"]  = f"{report['fwhm']['median']:.3f}"
-                        row["SF_fwhm_mean"] = f"{report['fwhm']['mean']:.3f}"
-                        row["SF_fwhm_std"]  = f"{report['fwhm']['sigma']:.3f}"
-                        row["SF_ell_med"]   = f"{report['ellipticity']['median']:.3f}"
-                        row["SF_ell_mean"]  = f"{report['ellipticity']['mean']:.3f}"
-                        row["SF_ell_std"]   = f"{report['ellipticity']['sigma']:.3f}"
-                        row["SF_status"]    = "success"
+                        new_row["SF_stars"]     = str(report["stars_analyzed"])
+                        new_row["SF_fwhm_med"]  = f"{report['fwhm']['median']:.3f}"
+                        new_row["SF_fwhm_mean"] = f"{report['fwhm']['mean']:.3f}"
+                        new_row["SF_fwhm_std"]  = f"{report['fwhm']['sigma']:.3f}"
+                        new_row["SF_ell_med"]   = f"{report['ellipticity']['median']:.3f}"
+                        new_row["SF_ell_mean"]  = f"{report['ellipticity']['mean']:.3f}"
+                        new_row["SF_ell_std"]   = f"{report['ellipticity']['sigma']:.3f}"
+                        new_row["SF_status"]    = "success"
                     else:
-                        row["SF_stars"]     = ""
-                        row["SF_fwhm_med"]  = ""
-                        row["SF_fwhm_mean"] = ""
-                        row["SF_fwhm_std"]  = ""
-                        row["SF_ell_med"]   = ""
-                        row["SF_ell_mean"]  = ""
-                        row["SF_ell_std"]   = ""
-                        row["SF_status"]    = "error"
-                    row["SF_timestamp"] = report["timestamp"]
-                    row["SF_version"]   = __version__
+                        new_row["SF_stars"]     = ""
+                        new_row["SF_fwhm_med"]  = ""
+                        new_row["SF_fwhm_mean"] = ""
+                        new_row["SF_fwhm_std"]  = ""
+                        new_row["SF_ell_med"]   = ""
+                        new_row["SF_ell_mean"]  = ""
+                        new_row["SF_ell_std"]   = ""
+                        new_row["SF_status"]    = "error"
+                    new_row["SF_timestamp"] = report["timestamp"]
+                    new_row["SF_version"]   = __version__
                     updated = True
-                writer.writerow(row)
+                writer.writerow(new_row)
         
         os.replace(temp_path, log_path)
         return updated
@@ -394,6 +425,7 @@ def main():
     parser.add_argument("--top-stars", type=int, default=300, help="Number of top stars to analyze")
     parser.add_argument("--box-size", type=int, default=15, help="Cutout size")
     parser.add_argument("--snr", type=float, default=5.0, help="SNR threshold")
+    parser.add_argument("--session", help="Filter by Session ID")
     args = parser.parse_args()
 
     overall_start = time.time()
@@ -401,8 +433,25 @@ def main():
     
     if os.path.isdir(args.path):
         print(f"StarFlux v{__version__}>> Scanning directory: {args.path}")
+        allowed_files = None
+        if args.session:
+            allowed_files = set()
+            log_path = os.path.join(args.path, "shutter_log.json")
+            if os.path.exists(log_path):
+                try:
+                    with open(log_path, 'r', encoding='utf-8') as f:
+                        for r in json.load(f):
+                            if r.get("session_id") == args.session:
+                                name = r.get("record", {}).get("file", {}).get("name")
+                                if name:
+                                    allowed_files.add(name)
+                except Exception as e:
+                    print(f"StarFlux>> [Warning] Failed to read shutter_log.json for session filter: {e}")
+
         for f in sorted(os.listdir(args.path)):
             if f.lower().endswith(('.dng', '.raw', '.fits', '.fit', '.fts')):
+                if allowed_files is not None and f not in allowed_files:
+                    continue
                 targets.append(os.path.join(args.path, f))
     else:
         targets = [args.path]
