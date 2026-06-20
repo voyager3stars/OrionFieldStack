@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-ExifScribe v1.0.1
+ExifScribe v1.6.1
 Reads EXIF metadata from DNG files and patches shutter_log.json
 (record.exif / record.file sections only).
 
@@ -31,7 +31,7 @@ except ImportError:
     sys.exit(1)
 
 SPEC_VERSION = "1.6.2"
-TOOL_VERSION = "1.0.1"
+TOOL_VERSION = "1.6.1"
 
 # ---------------------------------------------------------------------------
 # Constants & Mappings
@@ -160,18 +160,53 @@ def extract_exif(filepath):
 
     # Image dimensions: prefer full-resolution Image tags over EXIF (which may be thumbnail)
     # Priority: Image ImageWidth > EXIF ExifImageWidth
+    widths = []
+    heights = []
+    
     w_tag = tags.get("Image ImageWidth") or tags.get("EXIF ExifImageWidth")
     h_tag = tags.get("Image ImageLength") or tags.get("EXIF ExifImageLength")
     if w_tag:
-        try:
-            result["width"] = int(str(w_tag))
-        except Exception:
-            pass
+        try: widths.append(int(str(w_tag)))
+        except Exception: pass
     if h_tag:
+        try: heights.append(int(str(h_tag)))
+        except Exception: pass
+
+    # Check for SubIFDs in raw images to get original resolution
+    subifd_tag = tags.get("Image SubIFDs")
+    if subifd_tag:
+        import struct
         try:
-            result["height"] = int(str(h_tag))
+            with open(filepath, 'rb') as f:
+                header = f.read(4)
+                endian = '<' if header[:2] == b'II' else '>'
+                offsets = subifd_tag.values
+                if not isinstance(offsets, list):
+                    offsets = [offsets]
+                for offset in offsets:
+                    try:
+                        f.seek(offset)
+                        num_entries_data = f.read(2)
+                        if len(num_entries_data) == 2:
+                            num_entries = struct.unpack(f"{endian}H", num_entries_data)[0]
+                            for _ in range(num_entries):
+                                entry_data = f.read(12)
+                                if len(entry_data) < 12:
+                                    break
+                                tag, tag_type, count, val_offset = struct.unpack(f"{endian}HHII", entry_data)
+                                if tag == 256 and tag_type in (3, 4):
+                                    widths.append(val_offset)
+                                elif tag == 257 and tag_type in (3, 4):
+                                    heights.append(val_offset)
+                    except Exception:
+                        pass
         except Exception:
             pass
+
+    if widths:
+        result["width"] = max(widths)
+    if heights:
+        result["height"] = max(heights)
 
     return result
 
@@ -616,11 +651,19 @@ class ExifScribe:
 
                 needs_fill, mismatches, all_match = compare_exif_to_json(exif_data, entry)
 
-                if all_match and not self.force:
+                if self.force:
+                    # Force re-apply everything (highest priority when --force is active)
+                    if self.dry_run:
+                        print(f"  [DRY-RUN] {fname}: force re-apply all fields.")
+                    else:
+                        apply_exif_to_entry(entry, exif_data)
+                        print(f"  [Force] {fname}: all fields re-applied.")
+                        self.cnt_updated += 1
+                elif all_match:
                     # Case D complete / no changes needed
                     print(f"  [Skip] {fname}: all EXIF fields match JSON.")
                     self.cnt_skipped += 1
-                elif needs_fill and not self.force:
+                elif needs_fill:
                     # Case D: auto-fill empty fields
                     did_fill = self.process_case_d_auto(entry, exif_data, fname)
                     if did_fill:
@@ -641,14 +684,6 @@ class ExifScribe:
                         self.cnt_updated += 1
                     else:
                         self.cnt_skipped += 1
-                elif self.force:
-                    # Force re-apply everything
-                    if self.dry_run:
-                        print(f"  [DRY-RUN] {fname}: force re-apply all fields.")
-                    else:
-                        apply_exif_to_entry(entry, exif_data)
-                        print(f"  [Force] {fname}: all fields re-applied.")
-                        self.cnt_updated += 1
             else:
                 # Case A: DNG not in JSON
                 before_count = len(json_data)
