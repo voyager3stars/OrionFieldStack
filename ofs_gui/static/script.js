@@ -38,7 +38,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const pickerCurrentPath = document.getElementById('picker-current-path');
     const pickerUpBtn = document.getElementById('picker-up-btn');
     const confirmPickerBtn = document.getElementById('confirm-picker-btn');
-    
+
     let currentPickerPath = '';
     let activeFolderInput = null;
 
@@ -48,7 +48,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const data = await resp.json();
             currentPickerPath = data.current;
             pickerCurrentPath.textContent = data.current;
-            
+
             pickerList.innerHTML = '';
             data.dirs.forEach(dir => {
                 const div = document.createElement('div');
@@ -57,10 +57,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 div.onclick = () => loadFolders(`${currentPickerPath}/${dir}`);
                 pickerList.appendChild(div);
             });
-            
+
             pickerUpBtn.onclick = () => loadFolders(data.parent);
-        } catch (e) { 
-            console.error('Failed to load folders', e); 
+        } catch (e) {
+            console.error('Failed to load folders', e);
             pickerList.innerHTML = `<div class="error">Error: ${e.message}</div>`;
         }
     }
@@ -82,7 +82,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     closePickerBtn.onclick = () => pickerModal.classList.add('hidden');
     confirmPickerBtn.onclick = () => {
-        if (activeFolderInput) activeFolderInput.value = currentPickerPath;
+        if (activeFolderInput) {
+            activeFolderInput.value = currentPickerPath;
+            activeFolderInput.dispatchEvent(new Event('change'));
+        }
         pickerModal.classList.add('hidden');
     };
 
@@ -227,7 +230,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (event.data === '[Process Finished]') {
                 setShutterStatus(false); shutterEventSource.close();
                 addTerminalLog('--- Session Finished ---', 'system');
-                updateDashboard('### Finished Session'); 
+                updateDashboard('### Finished Session');
             } else {
                 addTerminalLog(event.data);
                 updateDashboard(event.data);
@@ -462,7 +465,7 @@ document.addEventListener('DOMContentLoaded', () => {
             img.onload = () => { imgContainer.innerHTML = ''; imgContainer.appendChild(img); };
         }
         imgInfo.textContent = `File: ${fileName} | ${record.record?.file?.format} | ${record.record?.file?.size_mb} MB`;
-        
+
         metaTable.innerHTML = '';
         const rows = [
             ['Objective', record?.objective],
@@ -499,7 +502,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const sseTerminal = document.getElementById('sse-terminal');
     const sseModalStatus = document.getElementById('sse-modal-status');
     const logPathInput = document.getElementById('log-path');
-    
+
     // Status bar elements
     const sseStatusBar = document.getElementById('sse-status-bar');
     const sseStatusText = document.getElementById('sse-status-text');
@@ -527,7 +530,7 @@ document.addEventListener('DOMContentLoaded', () => {
             sseStopBtn.disabled = false;
             sseModalStatus.textContent = 'Running...';
             sseModalStatus.style.color = 'var(--accent-blue)';
-            
+
             // Show main window status bar
             sseStatusBar.classList.remove('hidden');
             sseStatusText.textContent = 'SSE Running...';
@@ -538,10 +541,10 @@ document.addEventListener('DOMContentLoaded', () => {
         } else {
             sseRunBtn.disabled = false;
             sseStopBtn.disabled = true;
-            
+
             const label = endStatus || 'Idle';
             sseModalStatus.textContent = label;
-            
+
             if (label.toLowerCase().includes('finished') || label.toLowerCase().includes('success')) {
                 sseModalStatus.style.color = '#00ff88';
                 sseStatusText.textContent = 'SSE Finished';
@@ -555,11 +558,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 sseStatusText.textContent = 'SSE Idle';
                 sseStatusText.style.color = 'var(--text-dim)';
             }
-            
+
             const spinner = sseStatusBar.querySelector('.sse-spinner');
             if (spinner) spinner.style.display = 'none';
             sseStatusFile.textContent = '';
-            
+
             // Hide main status bar after 3 seconds if not running
             setTimeout(() => {
                 if (sseRunBtn.disabled === false) {
@@ -573,7 +576,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (sseEventSource) sseEventSource.close();
         sseTerminal.innerHTML = '';
         addSseTerminalLog('>>> Starting SkySolverEngine (SSE) log stream...', 'system');
-        
+
         sseEventSource = new EventSource('/api/sse/logs');
         sseEventSource.onmessage = (event) => {
             if (event.data === '[Process Finished]') {
@@ -583,7 +586,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 loadLogsBtn.click();
             } else {
                 addSseTerminalLog(event.data);
-                
+
                 // Parse processing DNG/RAW filename
                 const cleanLine = stripAnsi(event.data);
                 const match = cleanLine.match(/Processing\s+(?:Latest:\s+)?\[([^\]]+)\]/i);
@@ -686,7 +689,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const sfModalCloseBtn = document.getElementById('sf-modal-close-btn');
     const sfTerminal = document.getElementById('sf-terminal');
     const sfModalStatus = document.getElementById('sf-modal-status');
-    
+
     // Status bar elements
     const sfStatusBar = document.getElementById('sf-status-bar');
     const sfStatusText = document.getElementById('sf-status-text');
@@ -717,7 +720,7 @@ document.addEventListener('DOMContentLoaded', () => {
             sfStopBtn.disabled = false;
             sfModalStatus.textContent = 'Running...';
             sfModalStatus.style.color = 'var(--accent-blue)';
-            
+
             // Show main window status bar
             sfStatusBar.classList.remove('hidden');
             sfStatusText.textContent = 'Starflux Running...';
@@ -728,10 +731,10 @@ document.addEventListener('DOMContentLoaded', () => {
         } else {
             sfRunBtn.disabled = false;
             sfStopBtn.disabled = true;
-            
+
             const label = endStatus || 'Idle';
             sfModalStatus.textContent = label;
-            
+
             if (label.toLowerCase().includes('finished') || label.toLowerCase().includes('success')) {
                 sfModalStatus.style.color = '#00ff88';
                 sfStatusText.textContent = 'Starflux Finished';
@@ -745,11 +748,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 sfStatusText.textContent = 'Starflux Idle';
                 sfStatusText.style.color = 'var(--text-dim)';
             }
-            
+
             const spinner = sfStatusBar.querySelector('.sse-spinner');
             if (spinner) spinner.style.display = 'none';
             sfStatusFile.textContent = '';
-            
+
             // Hide main status bar after 3 seconds if not running
             setTimeout(() => {
                 if (sfRunBtn.disabled === false) {
@@ -763,7 +766,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (sfEventSource) sfEventSource.close();
         sfTerminal.innerHTML = '';
         addSfTerminalLog('>>> Starting Starflux log stream...', 'system');
-        
+
         sfEventSource = new EventSource('/api/starflux/logs');
         sfEventSource.onmessage = (event) => {
             if (event.data === '[Process Finished]') {
@@ -773,7 +776,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 loadLogsBtn.click();
             } else {
                 addSfTerminalLog(event.data);
-                
+
                 // Parse processing filename
                 const cleanLine = stripAnsi(event.data);
                 const match = cleanLine.match(/\[Processing\]\s+([^\.]+)\.(?:dng|raw|fits|fit|fts)/i);
@@ -868,7 +871,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const resp = await fetch('/api/status');
             const data = await resp.json();
             if (data.status === 'running') { setShutterStatus(true); startShutterLogStream(); }
-        } catch (e) {}
+        } catch (e) { }
         try {
             const resp = await fetch('/api/sse/status');
             const data = await resp.json();
@@ -877,7 +880,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 setSseStatus(true);
                 startSseLogStream();
             }
-        } catch (e) {}
+        } catch (e) { }
         try {
             const resp = await fetch('/api/starforge/status');
             const data = await resp.json();
@@ -886,7 +889,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 setSfgStatus(true);
                 startSfgLogStream();
             }
-        } catch (e) {}
+        } catch (e) { }
     })();
 
     // =========================================================================
@@ -902,10 +905,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const sfgFlatFields = document.getElementById('sfg-flat-fields');
     const sfgFlatDir = document.getElementById('sfg-flat-dir');
     const sfgFlatSession = document.getElementById('sfg-flat-session');
+    const sfgFlatSessionList = document.getElementById('sfg-flat-session-list');
     const sfgUseDark = document.getElementById('sfg-use-dark');
     const sfgDarkFields = document.getElementById('sfg-dark-fields');
     const sfgDarkDir = document.getElementById('sfg-dark-dir');
     const sfgDarkSession = document.getElementById('sfg-dark-session');
+    const sfgDarkSessionList = document.getElementById('sfg-dark-session-list');
     const sfgRunBtn = document.getElementById('sfg-run-btn');
     const sfgStopBtn = document.getElementById('sfg-stop-btn');
     const sfgLoadLogsBtn = document.getElementById('sfg-load-logs-btn');
@@ -936,6 +941,10 @@ document.addEventListener('DOMContentLoaded', () => {
     let sfgSessionsMap = new Map();
     let selectedSfgSessions = new Set();
     let selectedSfgFiles = new Set();
+    let sfgSelectedSessionId = null;
+    let sfgSelectedFileName = null;
+    let sfgFlatSessionsMap = new Map();
+    let sfgDarkSessionsMap = new Map();
     let sfgEventSource = null;
     let sfgResultFitsPath = '';
     let sfgResultMdPath = '';
@@ -959,6 +968,111 @@ document.addEventListener('DOMContentLoaded', () => {
     toggleFlatFields();
     toggleDarkFields();
 
+    // Toggle sfg advanced panel
+    const toggleSfgAdvancedBtn = document.getElementById('toggle-sfg-advanced');
+    const sfgAdvancedPanel = document.getElementById('sfg-advanced-settings');
+    if (toggleSfgAdvancedBtn && sfgAdvancedPanel) {
+        toggleSfgAdvancedBtn.onclick = () => {
+            const isActive = sfgAdvancedPanel.classList.toggle('active');
+            toggleSfgAdvancedBtn.classList.toggle('active');
+            toggleSfgAdvancedBtn.querySelector('.icon').textContent = isActive ? '▴' : '▾';
+        };
+    }
+
+    // Load and select calibration sessions helper
+    async function loadSessionsForCalibration(dirInput, listContainer, hiddenInput, prefix) {
+        const path = dirInput.value.trim();
+        if (!path) {
+            listContainer.innerHTML = '<div class="placeholder">Select folder to load sessions</div>';
+            hiddenInput.value = '';
+            return;
+        }
+        listContainer.innerHTML = '<div class="placeholder">Loading...</div>';
+        hiddenInput.value = '';
+
+        try {
+            const resp = await fetch(`/api/logs/browse?path=${encodeURIComponent(path)}`);
+            if (!resp.ok) {
+                listContainer.innerHTML = '<div class="placeholder">No sessions found (log missing)</div>';
+                return;
+            }
+            const data = await resp.json();
+            const sessionsMap = new Map();
+            const fullRecordsMap = new Map();
+            data.forEach(record => {
+                const sid = record.session_id || 'Unknown';
+                if (!sessionsMap.has(sid)) {
+                    sessionsMap.set(sid, record.objective || 'N/A');
+                }
+                if (!fullRecordsMap.has(sid)) {
+                    fullRecordsMap.set(sid, []);
+                }
+                fullRecordsMap.get(sid).push(record);
+            });
+            if (prefix === 'sfg-flat-sess') {
+                sfgFlatSessionsMap = fullRecordsMap;
+            } else if (prefix === 'sfg-dark-sess') {
+                sfgDarkSessionsMap = fullRecordsMap;
+            }
+
+            listContainer.innerHTML = '';
+            if (sessionsMap.size === 0) {
+                listContainer.innerHTML = '<div class="placeholder">No sessions found</div>';
+                return;
+            }
+
+            const sortedIds = Array.from(sessionsMap.keys()).sort().reverse();
+            sortedIds.forEach(sid => {
+                const obj = sessionsMap.get(sid);
+                const item = document.createElement('div');
+                item.className = 'list-item';
+
+                const cb = document.createElement('input');
+                cb.type = 'checkbox';
+                cb.id = `${prefix}-cb-${sid}`;
+                cb.onclick = (e) => e.stopPropagation();
+
+                const selectSession = (selected) => {
+                    cb.checked = selected;
+                    if (selected) {
+                        listContainer.querySelectorAll('input[type="checkbox"]').forEach(otherCb => {
+                            if (otherCb !== cb) otherCb.checked = false;
+                        });
+                        hiddenInput.value = sid;
+                    } else {
+                        hiddenInput.value = '';
+                    }
+                    updateSfgShootingInfo();
+                };
+
+                cb.onchange = () => selectSession(cb.checked);
+                item.onclick = () => selectSession(!cb.checked);
+
+                const label = document.createElement('label');
+                label.className = 'item-label';
+                label.htmlFor = cb.id;
+                label.innerHTML = `<span class="session-name">${sid}</span><span class="session-obj">${obj}</span>`;
+
+                item.appendChild(cb);
+                item.appendChild(label);
+                listContainer.appendChild(item);
+            });
+
+        } catch (e) {
+            listContainer.innerHTML = `<div class="placeholder error">Error: ${e.message}</div>`;
+        }
+    }
+
+    const updateFlatSessions = () => loadSessionsForCalibration(sfgFlatDir, sfgFlatSessionList, sfgFlatSession, 'sfg-flat-sess');
+    const updateDarkSessions = () => loadSessionsForCalibration(sfgDarkDir, sfgDarkSessionList, sfgDarkSession, 'sfg-dark-sess');
+
+    sfgFlatDir.onchange = updateFlatSessions;
+    sfgDarkDir.onchange = updateDarkSessions;
+
+    // Load initial directory sessions on load if default values exist
+    updateFlatSessions();
+    updateDarkSessions();
+
     // Load Logs
     sfgLoadLogsBtn.onclick = async () => {
         const path = document.getElementById('sfg-log-path').value.trim();
@@ -968,7 +1082,7 @@ document.addEventListener('DOMContentLoaded', () => {
         selectedSfgSessions.clear();
         selectedSfgFiles.clear();
         sfgSessionsMap.clear();
-        
+
         try {
             const resp = await fetch(`/api/logs/browse?path=${encodeURIComponent(path)}`);
             if (!resp.ok) throw new Error((await resp.json()).detail || 'Failed to load logs');
@@ -979,6 +1093,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 sfgSessionsMap.get(sid).push(record);
             });
             renderSfgSessions();
+            updateSfgShootingInfo();
         } catch (e) {
             sfgSessionList.innerHTML = `<div class="placeholder error">Error: ${e.message}</div>`;
         }
@@ -996,7 +1111,10 @@ document.addEventListener('DOMContentLoaded', () => {
             const obj = records[0]?.objective || 'N/A';
             const item = document.createElement('div');
             item.className = 'list-item';
-            
+            if (sfgSelectedSessionId === sid) {
+                item.classList.add('selected');
+            }
+
             const cb = document.createElement('input');
             cb.type = 'checkbox';
             cb.id = `sfg-sess-cb-${sid}`;
@@ -1015,6 +1133,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
             item.appendChild(cb);
             item.appendChild(label);
+
+            item.onclick = (e) => {
+                if (e.target === cb) return;
+                document.querySelectorAll('#sfg-session-list .list-item').forEach(i => i.classList.remove('selected'));
+                item.classList.add('selected');
+                sfgSelectedSessionId = sid;
+                sfgSelectedFileName = null;
+                document.querySelectorAll('#sfg-file-list .list-item').forEach(i => i.classList.remove('selected'));
+                updateSfgShootingInfo();
+            };
+
             sfgSessionList.appendChild(item);
         });
         updateSfgFiles();
@@ -1048,7 +1177,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const filePath = record.record?.file?.path || '';
             const fullPath = filePath ? `${filePath}/${fileName}` : fileName;
             const time = formatTime(record.record?.meta?.iso_timestamp);
-            
+
             const item = document.createElement('div');
             item.className = 'list-item';
 
@@ -1067,7 +1196,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const label = document.createElement('label');
             label.className = 'item-label';
             label.htmlFor = cb.id;
-            
+
             const q = record.analysis?.SF?.quality || record.analysis?.quality || record.record?.analysis?.quality;
             const ellVal = q?.sf_ell_med;
             const ellText = ellVal !== undefined ? `Ell: ${ellVal.toFixed(3)}` : 'No Quality';
@@ -1076,9 +1205,21 @@ document.addEventListener('DOMContentLoaded', () => {
 
             item.appendChild(cb);
             item.appendChild(label);
+
+            item.onclick = (e) => {
+                if (e.target === cb) return;
+                document.querySelectorAll('#sfg-file-list .list-item').forEach(i => i.classList.remove('selected'));
+                item.classList.add('selected');
+                sfgSelectedFileName = fileName;
+                sfgSelectedSessionId = null;
+                document.querySelectorAll('#sfg-session-list .list-item').forEach(i => i.classList.remove('selected'));
+                updateSfgShootingInfo();
+            };
+
             sfgFileList.appendChild(item);
         });
         drawHistogram();
+        updateSfgShootingInfo();
     }
 
     sfgSessionsSelectAll.onclick = (e) => {
@@ -1168,7 +1309,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const maxVal = Math.max(...values, 0.4);
         const rangeMax = maxVal > 0.5 ? 1.0 : 0.5;
         const rangeMin = 0.0;
-        
+
         const numBins = 20;
         const bins = new Array(numBins).fill(0);
         values.forEach(v => {
@@ -1259,7 +1400,7 @@ document.addEventListener('DOMContentLoaded', () => {
     sfgHistogramCanvas.onclick = (e) => {
         const rect = sfgHistogramCanvas.getBoundingClientRect();
         const clickX = e.clientX - rect.left;
-        
+
         const paddingLeft = 25;
         const paddingRight = 10;
         const chartWidth = sfgHistogramCanvas.width - paddingLeft - paddingRight;
@@ -1299,7 +1440,7 @@ document.addEventListener('DOMContentLoaded', () => {
             sfgStopBtn.disabled = false;
             sfgModalStatus.textContent = 'Running...';
             sfgModalStatus.style.color = 'var(--accent-blue)';
-            
+
             sfgStatusBar.classList.remove('hidden');
             sfgStatusText.textContent = 'StarForge Stacking...';
             sfgStatusText.style.color = '#00ff88';
@@ -1309,10 +1450,10 @@ document.addEventListener('DOMContentLoaded', () => {
         } else {
             sfgRunBtn.disabled = false;
             sfgStopBtn.disabled = true;
-            
+
             const label = endStatus || 'Idle';
             sfgModalStatus.textContent = label;
-            
+
             if (label.toLowerCase().includes('finished') || label.toLowerCase().includes('success')) {
                 sfgModalStatus.style.color = '#00ff88';
                 sfgStatusText.textContent = 'Stacking Finished';
@@ -1326,11 +1467,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 sfgStatusText.textContent = 'StarForge Idle';
                 sfgStatusText.style.color = 'var(--text-dim)';
             }
-            
+
             const spinner = sfgStatusBar.querySelector('.sse-spinner');
             if (spinner) spinner.style.display = 'none';
             sfgStatusFile.textContent = '';
-            
+
             setTimeout(() => {
                 if (sfgRunBtn.disabled === false) {
                     sfgStatusBar.classList.add('hidden');
@@ -1355,7 +1496,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (sfgEventSource) sfgEventSource.close();
         sfgTerminal.innerHTML = '';
         addSfgTerminalLog('>>> Starting StarForge Stacker log stream...', 'system');
-        
+
         sfgResultFitsPath = '';
         sfgResultMdPath = '';
         sfgResultHtmlPath = '';
@@ -1367,7 +1508,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 setSfgStatus(false, 'Finished');
                 sfgEventSource.close();
                 addSfgTerminalLog('--- StarForge Stack Finished ---', 'system');
-                
+
                 // Show result preview if we captured a fits path
                 if (sfgResultFitsPath) {
                     loadSfgFitsPreview(sfgResultFitsPath);
@@ -1389,16 +1530,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             } else {
                 addSfgTerminalLog(event.data);
-                
+
                 const cleanLine = stripAnsi(event.data);
-                
+
                 // Parse processing status
                 if (cleanLine.includes('[Stack-Logic] Processing:')) {
                     sfgStatusFile.textContent = cleanLine.trim();
                 } else if (cleanLine.includes('Processing:')) {
                     sfgStatusFile.textContent = cleanLine.trim();
                 }
-                
+
                 // Parse FITS saving
                 const fitsMatch = cleanLine.match(/\[Success\]\s+Master\s+frame\s+saved\s+to:\s+(.+)/i);
                 if (fitsMatch && fitsMatch[1]) {
@@ -1454,7 +1595,7 @@ document.addEventListener('DOMContentLoaded', () => {
         formData.append('out', sfgOut.value);
         formData.append('out_dir', sfgOutDir.value);
         formData.append('limit', sfgLimit.value);
-        
+
         formData.append('use_flat', sfgUseFlat.checked ? 'true' : 'false');
         if (sfgUseFlat.checked) {
             formData.append('flat_dir', sfgFlatDir.value);
@@ -1509,6 +1650,7 @@ document.addEventListener('DOMContentLoaded', () => {
     sfgModalCloseBtn.onclick = () => sfgConsoleModal.classList.add('hidden');
 
     function loadSfgFitsPreview(fitsPath) {
+        if (!sfgImagePreviewContainer) return;
         sfgImagePreviewContainer.innerHTML = '<div class="placeholder">Loading stacked preview...</div>';
         const img = document.createElement('img');
         img.src = `/api/fits/preview?path=${encodeURIComponent(fitsPath)}`;
@@ -1519,7 +1661,7 @@ document.addEventListener('DOMContentLoaded', () => {
             sfgImagePreviewContainer.innerHTML = '';
             sfgImagePreviewContainer.appendChild(img);
         };
-        
+
         // Setup click-to-zoom on stacked preview
         sfgImagePreviewContainer.onclick = () => {
             if (img.src) {
@@ -1529,9 +1671,309 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         };
 
-        sfgImageInfo.textContent = `Stacked FITS File: ${fitsPath.split('/').pop()}`;
+        if (sfgImageInfo) {
+            sfgImageInfo.textContent = `Stacked FITS File: ${fitsPath.split('/').pop()}`;
+        }
     }
-    
+
+    function updateSfgShootingInfo() {
+        const tbody = document.getElementById('sfg-shooting-info-body');
+        if (!tbody) return;
+
+        let stackRecords = [];
+        if (sfgSelectedFileName) {
+            for (const records of sfgSessionsMap.values()) {
+                const found = records.find(r => r.record?.file?.name === sfgSelectedFileName);
+                if (found) {
+                    stackRecords = [found];
+                    break;
+                }
+            }
+        } else if (sfgSelectedSessionId) {
+            stackRecords = sfgSessionsMap.get(sfgSelectedSessionId) || [];
+        } else {
+            if (selectedSfgSessions.size > 0) {
+                const firstSessionId = Array.from(selectedSfgSessions)[0];
+                stackRecords = sfgSessionsMap.get(firstSessionId) || [];
+            }
+        }
+
+        let darkRecords = [];
+        const darkSid = sfgDarkSession.value;
+        if (darkSid) {
+            darkRecords = sfgDarkSessionsMap.get(darkSid) || [];
+        }
+
+        let flatRecords = [];
+        const flatSid = sfgFlatSession.value;
+        if (flatSid) {
+            flatRecords = sfgFlatSessionsMap.get(flatSid) || [];
+        }
+
+        const stackRecord = stackRecords[0] || null;
+        const darkRecord = darkRecords[0] || null;
+        const flatRecord = flatRecords[0] || null;
+
+        // Filter stack records to only include files currently checked for stacking
+        const checkedStackRecords = stackRecords.filter(r => {
+            const fileName = r.record?.file?.name || '';
+            const filePath = r.record?.file?.path || '';
+            const fullPath = filePath ? `${filePath}/${fileName}` : fileName;
+            return selectedSfgFiles.has(fullPath);
+        });
+
+        const getVal = (rec, pathFn) => {
+            if (!rec) return '-';
+            try {
+                return pathFn(rec) ?? '-';
+            } catch (e) {
+                return '-';
+            }
+        };
+
+        const formatSigFigs = (num, sigFigs) => {
+            if (num === 0) return "0";
+            const prec = num.toPrecision(sigFigs);
+            if (prec.includes('e')) {
+                return Number(prec).toString();
+            }
+            return prec;
+        };
+
+        const getEnvStats = (records, key, unit) => {
+            if (!records || records.length === 0) return '-';
+            let sum = 0;
+            let count = 0;
+            let min = Infinity;
+            let max = -Infinity;
+            records.forEach(r => {
+                const val = r.record?.environment?.[key];
+                if (val !== undefined && val !== null) {
+                    const num = parseFloat(val);
+                    if (!isNaN(num)) {
+                        sum += num;
+                        count++;
+                        if (num < min) min = num;
+                        if (num > max) max = num;
+                    }
+                }
+            });
+            if (count === 0) return '-';
+            const avg = sum / count;
+            const avgStr = `${avg.toFixed(1)}${unit}`;
+            const minStr = min.toFixed(1);
+            const maxStr = max.toFixed(1);
+            return `${avgStr}<br><span style="font-size: 0.65rem; color: var(--text-dim);">(${minStr} ~ ${maxStr}${unit})</span>`;
+        };
+
+        const formatDateTime = (isoStr) => {
+            if (!isoStr || typeof isoStr !== 'string') return '-';
+            try {
+                const parts = isoStr.split('T');
+                if (parts.length < 2) return isoStr;
+                const date = parts[0].substring(2); // E.g. "26-05-05" (YY-MM-DD)
+                const time = parts[1].split('.')[0]; // E.g. "13:40:36"
+                return `${date} ${time}`;
+            } catch (e) {
+                return '-';
+            }
+        };
+
+        const formatSec = (val) => {
+            if (val === '-' || val === undefined || val === null) return '-';
+            const num = parseFloat(val);
+            if (isNaN(num)) return val;
+            return `${num}s`;
+        };
+
+        const getShutterStats = (records) => {
+            if (!records || records.length === 0) return { val: '-', consistent: true };
+            let sum = 0;
+            let count = 0;
+            let min = Infinity;
+            let max = -Infinity;
+            records.forEach(r => {
+                const val = r.record?.exif?.shutter_sec ?? r.record?.meta?.exposure_actual_sec;
+                if (val !== undefined && val !== null) {
+                    const num = parseFloat(val);
+                    if (!isNaN(num)) {
+                        sum += num;
+                        count++;
+                        if (num < min) min = num;
+                        if (num > max) max = num;
+                    }
+                }
+            });
+            if (count === 0) return { val: '-', consistent: true };
+
+            const avg = sum / count;
+            const avgStr = formatSigFigs(avg, 3) + 's';
+            let consistent = true;
+            if (count > 1) {
+                const firstVal = parseFloat(records[0].record?.exif?.shutter_sec ?? records[0].record?.meta?.exposure_actual_sec);
+                for (let i = 1; i < records.length; i++) {
+                    const curVal = parseFloat(records[i].record?.exif?.shutter_sec ?? records[i].record?.meta?.exposure_actual_sec);
+                    if (!isNaN(firstVal) && !isNaN(curVal)) {
+                        if (firstVal === 0 && curVal === 0) continue;
+                        const relDiff = Math.abs(firstVal - curVal) / Math.max(Math.abs(firstVal), Math.abs(curVal));
+                        if (relDiff > 0.01) {
+                            consistent = false;
+                            break;
+                        }
+                    } else if (firstVal !== curVal) {
+                        consistent = false;
+                        break;
+                    }
+                }
+            }
+
+            const minStr = formatSigFigs(min, 3);
+            const maxStr = formatSigFigs(max, 3);
+            return {
+                val: `${avgStr}<br><span style="font-size: 0.65rem; color: var(--text-dim);">(${minStr} ~ ${maxStr}s)</span>`,
+                consistent
+            };
+        };
+
+        const checkConsistency = (records, pathFn, formatFn) => {
+            if (!records || records.length === 0) return { val: '-', consistent: true };
+            const firstRaw = pathFn(records[0]);
+            const firstFormatted = formatFn ? formatFn(firstRaw) : (firstRaw ?? '-');
+
+            if (records.length <= 1) {
+                return { val: firstFormatted, consistent: true };
+            }
+
+            const isNumeric = (val) => {
+                if (typeof val === 'number') return true;
+                if (typeof val !== 'string') return false;
+                return !isNaN(val) && !isNaN(parseFloat(val));
+            };
+
+            const isClose = (v1, v2) => {
+                if (isNumeric(v1) && isNumeric(v2)) {
+                    const n1 = parseFloat(v1);
+                    const n2 = parseFloat(v2);
+                    if (n1 === 0 && n2 === 0) return true;
+                    const relDiff = Math.abs(n1 - n2) / Math.max(Math.abs(n1), Math.abs(n2));
+                    return relDiff <= 0.01;
+                }
+                return String(v1) === String(v2);
+            };
+
+            let consistent = true;
+            for (let i = 1; i < records.length; i++) {
+                const rawVal = pathFn(records[i]);
+                if (!isClose(firstRaw, rawVal)) {
+                    consistent = false;
+                    break;
+                }
+            }
+            return { val: firstFormatted, consistent };
+        };
+
+        const rows = [
+            { label: 'date_time', type: 'datetime' },
+            { label: 'telescope', type: 'simple', pathFn: rec => rec.equipment?.telescope },
+            { label: 'optics', type: 'simple', pathFn: rec => rec.equipment?.optics },
+            { label: 'filter', type: 'simple', pathFn: rec => rec.equipment?.filter },
+            { label: 'camera', type: 'simple', pathFn: rec => rec.equipment?.camera },
+            { label: 'aperture_mm', type: 'simple', pathFn: rec => rec.equipment?.aperture_mm },
+            { label: 'focal_length_mm', type: 'simple', pathFn: rec => rec.equipment?.focal_length_mm },
+            { label: 'f_number', type: 'simple', pathFn: rec => rec.equipment?.f_number },
+            { label: 'iso', type: 'simple', pathFn: rec => rec.record?.exif?.iso },
+            { label: 'shutter_sec', type: 'shutter' },
+            { label: 'width', type: 'simple', pathFn: rec => rec.record?.file?.width },
+            { label: 'height', type: 'simple', pathFn: rec => rec.record?.file?.height },
+            { label: 'temp_c', type: 'env', envKey: 'temp_c', unit: '°C' },
+            { label: 'humidity_pct', type: 'env', envKey: 'humidity_pct', unit: '%' },
+            { label: 'pressure_hPa', type: 'env', envKey: 'pressure_hPa', unit: ' hPa' }
+        ];
+
+        tbody.innerHTML = '';
+        rows.forEach(row => {
+            const tr = document.createElement('tr');
+
+            let sVal, dVal, fVal;
+            if (row.type === 'simple') {
+                const checkRes = checkConsistency(checkedStackRecords, row.pathFn, row.formatFn);
+                sVal = checkRes.val;
+                if (checkedStackRecords.length > 0) {
+                    sVal += checkRes.consistent ? ' ✅' : ' 🚫';
+                }
+
+                dVal = getVal(darkRecord, row.pathFn);
+                fVal = getVal(flatRecord, row.pathFn);
+                if (row.formatFn) {
+                    dVal = row.formatFn(dVal);
+                    fVal = row.formatFn(fVal);
+                }
+            } else if (row.type === 'shutter') {
+                const checkRes = getShutterStats(checkedStackRecords);
+                sVal = checkRes.val;
+                if (checkedStackRecords.length > 0) {
+                    sVal += checkRes.consistent ? ' ✅' : ' 🚫';
+                }
+
+                const darkRes = getShutterStats(darkRecords);
+                dVal = darkRes.val;
+
+                const flatRes = getShutterStats(flatRecords);
+                fVal = flatRes.val;
+            } else if (row.type === 'env') {
+                sVal = getEnvStats(stackRecords, row.envKey, row.unit);
+                dVal = getEnvStats(darkRecords, row.envKey, row.unit);
+                fVal = getEnvStats(flatRecords, row.envKey, row.unit);
+            } else if (row.type === 'datetime') {
+                const renderSessionDt = (sessionIds, sessionsMap, selectedFileName) => {
+                    if (selectedFileName) {
+                        for (const [sid, records] of sessionsMap.entries()) {
+                            const found = records.find(r => r.record?.file?.name === selectedFileName);
+                            if (found) {
+                                const time = formatDateTime(found.record?.meta?.iso_timestamp);
+                                return `<div style="margin-bottom: 4px;"><strong style="color: var(--accent-gold); font-size: 0.7rem;">${sid}</strong><br>${time}</div>`;
+                            }
+                        }
+                    }
+                    if (sessionIds.length === 0) return '-';
+                    let html = '';
+                    sessionIds.forEach(sid => {
+                        const recs = sessionsMap.get(sid) || [];
+                        if (recs.length === 0) return;
+                        const sorted = [...recs].sort((a, b) => {
+                            const ta = a.record?.meta?.iso_timestamp || '';
+                            const tb = b.record?.meta?.iso_timestamp || '';
+                            return ta.localeCompare(tb);
+                        });
+                        html += `<div style="margin-bottom: 6px;">`;
+                        html += `<strong style="color: var(--accent-gold); font-size: 0.7rem;">${sid}</strong><br>`;
+                        if (sorted.length === 1) {
+                            html += formatDateTime(sorted[0].record?.meta?.iso_timestamp);
+                        } else {
+                            const firstTime = formatDateTime(sorted[0].record?.meta?.iso_timestamp);
+                            const lastTime = formatDateTime(sorted[sorted.length - 1].record?.meta?.iso_timestamp);
+                            html += `${firstTime}<br>~ ${lastTime}`;
+                        }
+                        html += `</div>`;
+                    });
+                    return html;
+                };
+
+                sVal = renderSessionDt(sfgSelectedSessionId ? [sfgSelectedSessionId] : Array.from(selectedSfgSessions), sfgSessionsMap, sfgSelectedFileName);
+                dVal = renderSessionDt(sfgDarkSession.value ? [sfgDarkSession.value] : [], sfgDarkSessionsMap, null);
+                fVal = renderSessionDt(sfgFlatSession.value ? [sfgFlatSession.value] : [], sfgFlatSessionsMap, null);
+            }
+
+            tr.innerHTML = `
+                <th style="padding: 3px 4px; font-weight: 500; color: var(--text-dim); text-align: left; vertical-align: top;">${row.label}</th>
+                <td style="padding: 3px 4px; color: var(--text-main); font-family: 'JetBrains Mono', monospace; vertical-align: top;">${sVal}</td>
+                <td style="padding: 3px 4px; color: var(--text-main); font-family: 'JetBrains Mono', monospace; vertical-align: top;">${dVal}</td>
+                <td style="padding: 3px 4px; color: var(--text-main); font-family: 'JetBrains Mono', monospace; vertical-align: top;">${fVal}</td>
+            `;
+            tbody.appendChild(tr);
+        });
+    }
+
     // Trigger initial status check for StarForge
     (async () => {
         try {
@@ -1542,7 +1984,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 setSfgStatus(true);
                 startSfgLogStream();
             }
-        } catch (e) {}
+        } catch (e) { }
     })();
 });
 

@@ -1,17 +1,20 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>OrionFieldStack Control Panel</title>
     <link rel="stylesheet" href="style.css">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=JetBrains+Mono&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=JetBrains+Mono&display=swap"
+        rel="stylesheet">
 </head>
+
 <body>
     <div class="container">
         <header>
             <div class="header-main">
-                <h1>OrionFieldStack <span class="v-tag">v1.4.1</span></h1>
+                <h1>OrionFieldStack <span class="v-tag">v1.4.2</span></h1>
                 <nav class="tabs">
                     <button class="tab-btn active" data-tab="shutter">SHUTTER</button>
                     <button class="tab-btn" data-tab="logdata">LOGDATA</button>
@@ -60,7 +63,8 @@
                                             <option value="bias">bias</option>
                                             <option value="custom">Other...</option>
                                         </select>
-                                        <input type="text" id="frame_type" name="frame_type" value="test" class="hidden" style="margin-top: 5px;">
+                                        <input type="text" id="frame_type" name="frame_type" value="test" class="hidden"
+                                            style="margin-top: 5px;">
                                     </div>
                                     <div class="form-group full-width">
                                         <label for="save_dir">Save Directory</label>
@@ -141,7 +145,8 @@
 
                             <div class="actions">
                                 <button type="submit" id="start-btn" class="btn-primary">START SESSION</button>
-                                <button type="button" id="save-default-btn" class="btn-secondary">Save as Default</button>
+                                <button type="button" id="save-default-btn" class="btn-secondary">Save as
+                                    Default</button>
                                 <button type="button" id="stop-btn" class="btn-danger" disabled>ABORT</button>
                             </div>
                         </form>
@@ -194,7 +199,7 @@
                             </div>
                             <button type="button" id="load-logs-btn" class="btn-primary-small">Load Logs</button>
                         </div>
-                        
+
                         <!-- SSE Runner controls -->
                         <div class="sse-controls-section">
                             <h3 class="sse-title">SkySolverEngine (SSE)</h3>
@@ -203,7 +208,8 @@
                                     <label for="sse-target">Target</label>
                                     <select id="sse-target">
                                         <option value="folder">Entire Folder</option>
-                                        <option value="session" id="sse-target-session-opt" disabled>Selected Session</option>
+                                        <option value="session" id="sse-target-session-opt" disabled>Selected Session
+                                        </option>
                                         <option value="file" id="sse-target-file-opt" disabled>Selected File</option>
                                     </select>
                                 </div>
@@ -219,9 +225,10 @@
                                 </div>
                                 <div class="sse-actions">
                                     <button type="button" id="sse-run-btn" class="btn-primary-small">RUN SSE</button>
-                                    <button type="button" id="sse-stop-btn" class="btn-danger-small" disabled>STOP</button>
+                                    <button type="button" id="sse-stop-btn" class="btn-danger-small"
+                                        disabled>STOP</button>
                                 </div>
-                                 
+
                                 <!-- Active Status Indicator -->
                                 <div id="sse-status-bar" class="sse-status-bar hidden">
                                     <div class="sse-status-main">
@@ -241,18 +248,22 @@
                                     <label for="sf-target">Target</label>
                                     <select id="sf-target">
                                         <option value="folder">Entire Folder</option>
-                                        <option value="session" id="sf-target-session-opt" disabled>Selected Session</option>
+                                        <option value="session" id="sf-target-session-opt" disabled>Selected Session
+                                        </option>
                                         <option value="file" id="sf-target-file-opt" disabled>Selected File</option>
                                     </select>
                                 </div>
-                                <div class="form-group-compact" style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
+                                <div class="form-group-compact"
+                                    style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
                                     <div class="form-group">
                                         <label for="sf-snr">SNR (def=5)</label>
-                                        <input type="number" id="sf-snr" value="5.0" step="0.1" style="padding: 4px 8px; font-size: 0.75rem; background: rgba(0,0,0,0.3); border: 1px solid var(--glass-border); color: white; border-radius: 4px; width: 100%;">
+                                        <input type="number" id="sf-snr" value="5.0" step="0.1"
+                                            style="padding: 4px 8px; font-size: 0.75rem; background: rgba(0,0,0,0.3); border: 1px solid var(--glass-border); color: white; border-radius: 4px; width: 100%;">
                                     </div>
                                     <div class="form-group">
                                         <label for="sf-top-stars">Stars (def=300)</label>
-                                        <input type="number" id="sf-top-stars" value="300" step="10" style="padding: 4px 8px; font-size: 0.75rem; background: rgba(0,0,0,0.3); border: 1px solid var(--glass-border); color: white; border-radius: 4px; width: 100%;">
+                                        <input type="number" id="sf-top-stars" value="300" step="10"
+                                            style="padding: 4px 8px; font-size: 0.75rem; background: rgba(0,0,0,0.3); border: 1px solid var(--glass-border); color: white; border-radius: 4px; width: 100%;">
                                     </div>
                                 </div>
                                 <div class="sse-options">
@@ -266,14 +277,18 @@
                                     </label>
                                 </div>
                                 <div class="sse-actions">
-                                    <button type="button" id="sf-run-btn" class="btn-primary-small">RUN STARFLUX</button>
-                                    <button type="button" id="sf-stop-btn" class="btn-danger-small" disabled>STOP</button>
+                                    <button type="button" id="sf-run-btn" class="btn-primary-small">RUN
+                                        STARFLUX</button>
+                                    <button type="button" id="sf-stop-btn" class="btn-danger-small"
+                                        disabled>STOP</button>
                                 </div>
-                                 
+
                                 <!-- Active Status Indicator -->
-                                <div id="sf-status-bar" class="sse-status-bar hidden" style="background: rgba(201, 160, 99, 0.08); border-color: rgba(201, 160, 99, 0.25);">
+                                <div id="sf-status-bar" class="sse-status-bar hidden"
+                                    style="background: rgba(201, 160, 99, 0.08); border-color: rgba(201, 160, 99, 0.25);">
                                     <div class="sse-status-main" style="color: var(--accent-gold);">
-                                        <span class="sse-spinner" style="border-top-color: var(--accent-gold); border-color: rgba(201, 160, 99, 0.2);"></span>
+                                        <span class="sse-spinner"
+                                            style="border-top-color: var(--accent-gold); border-color: rgba(201, 160, 99, 0.2);"></span>
                                         <span id="sf-status-text">Starflux Running...</span>
                                     </div>
                                     <div id="sf-status-file" class="sse-status-file"></div>
@@ -329,165 +344,290 @@
             <!-- STARFORGE TAB -->
             <div id="starforge-tab" class="tab-panel">
                 <div class="logdata-layout-3col">
-                    <!-- Column 1: StarForge Settings & Actions -->
-                    <aside class="col-sessions" style="overflow-y: auto; max-height: calc(100vh - 120px);">
-                        <div class="sse-controls-section">
-                            <h3 class="sse-title">StarForge Stacker</h3>
-                            <form id="starforge-form" class="sse-form" onsubmit="return false;">
-                                <div class="form-group-compact">
-                                    <label for="sfg-mode">Mode</label>
-                                    <select id="sfg-mode" name="mode">
-                                        <option value="mono">Monochrome</option>
-                                        <option value="color">Color</option>
-                                    </select>
-                                </div>
-                                <div class="form-group-compact">
-                                    <label for="sfg-method">Stack Method</label>
-                                    <select id="sfg-method" name="method">
-                                        <option value="sigma_clip">Sigma Clip</option>
-                                        <option value="median">Median</option>
-                                        <option value="mean">Mean</option>
-                                    </select>
-                                </div>
-                                <div class="form-group-compact">
-                                    <label for="sfg-threshold">Threshold (Ellipticity)</label>
-                                    <input type="number" id="sfg-threshold" name="threshold" value="0.20" step="0.01" min="0" max="1">
-                                </div>
-                                <div class="form-group-compact">
-                                    <label for="sfg-out">Output File</label>
-                                    <input type="text" id="sfg-out" name="out" value="AUTO">
-                                </div>
-                                <div class="form-group-compact">
-                                    <label for="sfg-out-dir">Output Directory</label>
-                                    <div class="input-with-button">
-                                        <input type="text" id="sfg-out-dir" name="out_dir" value="./output">
-                                        <button type="button" id="browse-sfg-out-dir-btn" class="btn-small">Browse</button>
+                    <!-- Column 1: StarForge Settings, Actions & File Selectors -->
+                    <aside class="col-sessions"
+                        style="max-height: calc(100vh - 120px); height: calc(100vh - 120px); display: flex; flex-direction: column;">
+                        <div class="sse-controls-section" style="padding: 8px 10px;">
+                            <h3 class="sse-title" style="margin-bottom: 4px;">StarForge Stacker</h3>
+                            <form id="starforge-form" class="sse-form" onsubmit="return false;" style="gap: 4px;">
+                                <div style="display: grid; grid-template-columns: 1fr 1.2fr; gap: 6px;">
+                                    <div class="form-group-compact">
+                                        <label for="sfg-mode" style="min-width: unset;">Mode</label>
+                                        <select id="sfg-mode" name="mode" style="padding: 4px 6px;">
+                                            <option value="mono">Mono</option>
+                                            <option value="color">Color</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group-compact">
+                                        <label for="sfg-threshold" style="min-width: unset;">Thresh</label>
+                                        <input type="number" id="sfg-threshold" name="threshold" value="0.20"
+                                            step="0.01" min="0" max="1" style="width: 100%; padding: 4px 6px;">
                                     </div>
                                 </div>
                                 <div class="form-group-compact">
-                                    <label for="sfg-limit">Limit Frames (optional)</label>
-                                    <input type="number" id="sfg-limit" name="limit" placeholder="No Limit" min="1">
+                                    <label for="sfg-out-dir" style="min-width: unset; width: 45px;">Out Dir</label>
+                                    <div class="input-with-button" style="flex-grow: 1; gap: 4px;">
+                                        <input type="text" id="sfg-out-dir" name="out_dir" value="./output"
+                                            style="width: 100%; padding: 4px 6px;">
+                                        <button type="button" id="browse-sfg-out-dir-btn" class="btn-small"
+                                            style="padding: 4px 8px;">Browse</button>
+                                    </div>
                                 </div>
 
-                                <!-- Flat Calibration -->
-                                <div style="border-top: 1px solid var(--glass-border); margin-top: 10px; padding-top: 8px;">
-                                    <label class="checkbox-container" style="font-weight: 600;">
-                                        <input type="checkbox" id="sfg-use-flat" name="use_flat" checked>
-                                        Flat Calibration
-                                    </label>
-                                    <div id="sfg-flat-fields" class="form-group-compact" style="margin-left: 15px; margin-top: 5px;">
-                                        <label for="sfg-flat-dir">Flat Directory</label>
-                                        <div class="input-with-button" style="margin-bottom: 5px;">
-                                            <input type="text" id="sfg-flat-dir" name="flat_dir" placeholder="~/Pictures/flat">
-                                            <button type="button" id="browse-sfg-flat-dir-btn" class="btn-small">Browse</button>
+                                <!-- Advanced Toggle -->
+                                <div class="advanced-header" style="margin-top: 4px; margin-bottom: 2px;">
+                                    <button type="button" id="toggle-sfg-advanced" class="btn-toggle"
+                                        style="padding: 4px 8px; font-size: 0.7rem;">
+                                        <span>Advanced Options</span>
+                                        <span class="icon">▾</span>
+                                    </button>
+                                </div>
+
+                                <!-- Advanced Settings Section -->
+                                <div id="sfg-advanced-settings" class="advanced-panel">
+                                    <div
+                                        style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 4px;">
+                                        <div class="form-group-compact">
+                                            <label for="sfg-method" style="min-width: unset;">Method</label>
+                                            <select id="sfg-method" name="method" style="padding: 4px 6px;">
+                                                <option value="sigma_clip">Sigma Clip</option>
+                                                <option value="median">Median</option>
+                                                <option value="mean">Mean</option>
+                                            </select>
                                         </div>
-                                        <label for="sfg-flat-session">Flat Session (optional)</label>
-                                        <input type="text" id="sfg-flat-session" name="flat_session" placeholder="Force Session ID">
-                                    </div>
-                                </div>
-
-                                <!-- Dark Calibration -->
-                                <div style="border-top: 1px solid var(--glass-border); margin-top: 10px; padding-top: 8px;">
-                                    <label class="checkbox-container" style="font-weight: 600;">
-                                        <input type="checkbox" id="sfg-use-dark" name="use_dark" checked>
-                                        Dark Subtraction
-                                    </label>
-                                    <div id="sfg-dark-fields" class="form-group-compact" style="margin-left: 15px; margin-top: 5px;">
-                                        <label for="sfg-dark-dir">Dark Directory</label>
-                                        <div class="input-with-button" style="margin-bottom: 5px;">
-                                            <input type="text" id="sfg-dark-dir" name="dark_dir" placeholder="~/Pictures/dark">
-                                            <button type="button" id="browse-sfg-dark-dir-btn" class="btn-small">Browse</button>
+                                        <div class="form-group-compact">
+                                            <label for="sfg-limit" style="min-width: unset;">Limit</label>
+                                            <input type="number" id="sfg-limit" name="limit" placeholder="None" min="1"
+                                                style="width: 100%; padding: 4px 6px;">
                                         </div>
-                                        <label for="sfg-dark-session">Dark Session (optional)</label>
-                                        <input type="text" id="sfg-dark-session" name="dark_session" placeholder="Force Session ID">
+                                    </div>
+                                    <div class="form-group-compact" style="margin-bottom: 4px;">
+                                        <label for="sfg-out" style="min-width: unset; width: 45px;">Out File</label>
+                                        <input type="text" id="sfg-out" name="out" value="AUTO"
+                                            style="flex-grow: 1; padding: 4px 6px;">
                                     </div>
                                 </div>
 
-                                <div class="sse-actions" style="margin-top: 15px;">
-                                    <button type="button" id="sfg-run-btn" class="btn-primary-small" style="width: 100%; font-weight: 600;">RUN STARFORGE</button>
-                                    <button type="button" id="sfg-stop-btn" class="btn-danger-small" style="width: 100%; margin-top: 5px;" disabled>STOP</button>
+                                <div class="sse-actions" style="margin-top: 4px; display: flex; gap: 6px;">
+                                    <button type="button" id="sfg-run-btn" class="btn-primary-small"
+                                        style="flex: 2; font-weight: 600; padding: 6px;">RUN STARFORGE</button>
+                                    <button type="button" id="sfg-stop-btn" class="btn-danger-small"
+                                        style="flex: 1; padding: 6px;" disabled>STOP</button>
                                 </div>
 
                                 <!-- Active Status Indicator -->
-                                <div id="sfg-status-bar" class="sse-status-bar hidden" style="background: rgba(0, 255, 136, 0.08); border-color: rgba(0, 255, 136, 0.25); margin-top: 10px;">
+                                <div id="sfg-status-bar" class="sse-status-bar hidden"
+                                    style="background: rgba(0, 255, 136, 0.08); border-color: rgba(0, 255, 136, 0.25); margin-top: 6px; padding: 6px 10px;">
                                     <div class="sse-status-main" style="color: #00ff88;">
-                                        <span class="sse-spinner" style="border-top-color: #00ff88; border-color: rgba(0, 255, 136, 0.2);"></span>
+                                        <span class="sse-spinner"
+                                            style="border-top-color: #00ff88; border-color: rgba(0, 255, 136, 0.2);"></span>
                                         <span id="sfg-status-text">Stacking...</span>
                                     </div>
                                     <div id="sfg-status-file" class="sse-status-file"></div>
                                 </div>
                             </form>
                         </div>
+
+                        <!-- Log Loader & Session/File Lists -->
+                        <div
+                            style="border-top: 1px solid var(--glass-border); padding: 8px 10px; display: flex; flex-direction: column; flex-grow: 1; min-height: 0;">
+                            <div class="col-header-rich"
+                                style="padding: 0 0 6px 0; border-bottom: 1px solid var(--glass-border); display: flex; flex-direction: row; gap: 6px; align-items: center;">
+                                <div class="input-with-button" style="width: 100%; gap: 4px;">
+                                    <input type="text" id="sfg-log-path" value="../shutterpro03"
+                                        placeholder="Log Folder"
+                                        style="width: 100%; padding: 4px 8px; font-size: 0.75rem;">
+                                    <button type="button" id="browse-sfg-log-path-btn" class="btn-small"
+                                        style="padding: 4px 8px;">Browse</button>
+                                    <button type="button" id="sfg-load-logs-btn" class="btn-primary-small"
+                                        style="width: auto; padding: 4px 10px; white-space: nowrap; font-weight: 600;">Load</button>
+                                </div>
+                            </div>
+
+                            <div
+                                style="display: flex; flex-direction: column; gap: 8px; margin-top: 8px; flex-grow: 1; min-height: 0;">
+                                <!-- Sessions -->
+                                <div
+                                    style="display: flex; flex-direction: column; border: 1px solid var(--glass-border); border-radius: 8px; background: rgba(0,0,0,0.15); overflow: hidden; flex: 1; min-height: 100px;">
+                                    <div class="list-title"
+                                        style="display: flex; justify-content: space-between; align-items: center; padding: 4px 8px; background: rgba(255,255,255,0.03);">
+                                        <span>Sessions</span>
+                                        <div style="font-size: 0.7rem;">
+                                            <a href="#" id="sfg-sessions-select-all"
+                                                style="color: var(--accent-blue); text-decoration: none; margin-right: 6px;">All</a>
+                                            <a href="#" id="sfg-sessions-select-none"
+                                                style="color: var(--text-dim); text-decoration: none;">None</a>
+                                        </div>
+                                    </div>
+                                    <div id="sfg-session-list" class="list-container"
+                                        style="flex: 1; overflow-y: auto; padding: 4px;">
+                                        <div class="placeholder">Load folder to browse</div>
+                                    </div>
+                                </div>
+                                <!-- Files -->
+                                <div
+                                    style="display: flex; flex-direction: column; border: 1px solid var(--glass-border); border-radius: 8px; background: rgba(0,0,0,0.15); overflow: hidden; flex: 1; min-height: 100px;">
+                                    <div class="list-title"
+                                        style="display: flex; justify-content: space-between; align-items: center; padding: 4px 8px; background: rgba(255,255,255,0.03);">
+                                        <span>Files to Stack</span>
+                                        <div style="font-size: 0.7rem;">
+                                            <a href="#" id="sfg-files-select-all"
+                                                style="color: var(--accent-blue); text-decoration: none; margin-right: 6px;">All</a>
+                                            <a href="#" id="sfg-files-select-none"
+                                                style="color: var(--text-dim); text-decoration: none;">None</a>
+                                        </div>
+                                    </div>
+                                    <div id="sfg-file-list" class="list-container"
+                                        style="flex: 1; overflow-y: auto; padding: 4px;">
+                                        <div class="placeholder">Select sessions first</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </aside>
 
-                    <!-- Column 2: Log Folder loader + Multi-select Sessions/Files -->
-                    <aside class="col-files" style="display: flex; flex-direction: column; height: calc(100vh - 120px);">
-                        <div class="col-header-rich" style="padding: 10px; border-bottom: 1px solid var(--glass-border);">
-                            <div class="input-with-button" style="margin-bottom: 8px; width: 100%;">
-                                <input type="text" id="sfg-log-path" value="../shutterpro03" placeholder="Log Folder" style="width: 100%;">
-                                <button type="button" id="browse-sfg-log-path-btn" class="btn-small">Browse</button>
-                            </div>
-                            <button type="button" id="sfg-load-logs-btn" class="btn-primary-small" style="width: 100%;">Load Log Sessions</button>
-                        </div>
-                        
-                        <div style="flex: 1; display: grid; grid-template-rows: 1fr 1fr; min-height: 0;">
-                            <!-- Sessions -->
-                            <div style="display: flex; flex-direction: column; border-bottom: 1px solid var(--glass-border); min-height: 0;">
-                                <div class="list-title" style="display: flex; justify-content: space-between; align-items: center; padding: 6px 12px; background: rgba(255,255,255,0.03);">
-                                    <span>Sessions</span>
-                                    <div style="font-size: 0.75rem;">
-                                        <a href="#" id="sfg-sessions-select-all" style="color: var(--accent-blue); text-decoration: none; margin-right: 8px;">All</a>
-                                        <a href="#" id="sfg-sessions-select-none" style="color: var(--text-dim); text-decoration: none;">None</a>
+                    <!-- Column 2: Calibration Settings -->
+                    <aside class="col-files" style="overflow-y: auto; max-height: calc(100vh - 120px); padding: 10px;">
+                        <div class="sse-controls-section" style="border-bottom: none;">
+                            <h3 class="sse-title">Calibration Settings</h3>
+
+                            <!-- Flat Calibration -->
+                            <div style="margin-top: 10px; padding-top: 8px;">
+                                <label class="checkbox-container" style="font-weight: 600;">
+                                    <input type="checkbox" id="sfg-use-flat" name="use_flat" checked>
+                                    Flat Calibration
+                                </label>
+                                <div id="sfg-flat-fields"
+                                    style="margin-left: 15px; margin-top: 5px; display: flex; flex-direction: column; gap: 8px;">
+                                    <div style="display: flex; flex-direction: column;">
+                                        <label for="sfg-flat-dir"
+                                            style="font-size: 0.7rem; color: var(--text-dim); margin-bottom: 4px;">Flat
+                                            Directory</label>
+                                        <div class="input-with-button">
+                                            <input type="text" id="sfg-flat-dir" name="flat_dir"
+                                                placeholder="~/Pictures/flat" style="flex-grow: 1;">
+                                            <button type="button" id="browse-sfg-flat-dir-btn"
+                                                class="btn-small">Browse</button>
+                                        </div>
+                                    </div>
+                                    <div style="display: flex; flex-direction: column;">
+                                        <label
+                                            style="font-size: 0.7rem; color: var(--text-dim); margin-bottom: 4px;">Flat
+                                            Session (optional)</label>
+                                        <input type="hidden" id="sfg-flat-session" name="flat_session">
+                                        <div
+                                            style="display: flex; flex-direction: column; border: 1px solid var(--glass-border); border-radius: 8px; background: rgba(0,0,0,0.15); overflow: hidden; height: 140px;">
+                                            <div class="list-title"
+                                                style="padding: 4px 12px; background: rgba(255,255,255,0.03); font-size: 0.65rem;">
+                                                <span>Available Flat Sessions</span>
+                                            </div>
+                                            <div id="sfg-flat-session-list" class="list-container"
+                                                style="flex: 1; overflow-y: auto;">
+                                                <div class="placeholder">Select flat folder to load sessions</div>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
-                                <div id="sfg-session-list" class="list-container" style="flex: 1; overflow-y: auto;">
-                                    <div class="placeholder">Load folder to browse</div>
-                                </div>
                             </div>
-                            <!-- Files -->
-                            <div style="display: flex; flex-direction: column; min-height: 0;">
-                                <div class="list-title" style="display: flex; justify-content: space-between; align-items: center; padding: 6px 12px; background: rgba(255,255,255,0.03);">
-                                    <span>Files to Stack</span>
-                                    <div style="font-size: 0.75rem;">
-                                        <a href="#" id="sfg-files-select-all" style="color: var(--accent-blue); text-decoration: none; margin-right: 8px;">All</a>
-                                        <a href="#" id="sfg-files-select-none" style="color: var(--text-dim); text-decoration: none;">None</a>
+
+                            <!-- Dark Calibration -->
+                            <div
+                                style="border-top: 1px solid var(--glass-border); margin-top: 15px; padding-top: 12px;">
+                                <label class="checkbox-container" style="font-weight: 600;">
+                                    <input type="checkbox" id="sfg-use-dark" name="use_dark" checked>
+                                    Dark Subtraction
+                                </label>
+                                <div id="sfg-dark-fields"
+                                    style="margin-left: 15px; margin-top: 5px; display: flex; flex-direction: column; gap: 8px;">
+                                    <div style="display: flex; flex-direction: column;">
+                                        <label for="sfg-dark-dir"
+                                            style="font-size: 0.7rem; color: var(--text-dim); margin-bottom: 4px;">Dark
+                                            Directory</label>
+                                        <div class="input-with-button">
+                                            <input type="text" id="sfg-dark-dir" name="dark_dir"
+                                                placeholder="~/Pictures/dark" style="flex-grow: 1;">
+                                            <button type="button" id="browse-sfg-dark-dir-btn"
+                                                class="btn-small">Browse</button>
+                                        </div>
                                     </div>
-                                </div>
-                                <div id="sfg-file-list" class="list-container" style="flex: 1; overflow-y: auto;">
-                                    <div class="placeholder">Select sessions first</div>
+                                    <div style="display: flex; flex-direction: column;">
+                                        <label
+                                            style="font-size: 0.7rem; color: var(--text-dim); margin-bottom: 4px;">Dark
+                                            Session (optional)</label>
+                                        <input type="hidden" id="sfg-dark-session" name="dark_session">
+                                        <div
+                                            style="display: flex; flex-direction: column; border: 1px solid var(--glass-border); border-radius: 8px; background: rgba(0,0,0,0.15); overflow: hidden; height: 140px;">
+                                            <div class="list-title"
+                                                style="padding: 4px 12px; background: rgba(255,255,255,0.03); font-size: 0.65rem;">
+                                                <span>Available Dark Sessions</span>
+                                            </div>
+                                            <div id="sfg-dark-session-list" class="list-container"
+                                                style="flex: 1; overflow-y: auto;">
+                                                <div class="placeholder">Select dark folder to load sessions</div>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
                     </aside>
 
                     <!-- Column 3: Histogram & Stacked Preview -->
-                    <section class="col-details" style="overflow-y: auto; max-height: calc(100vh - 120px); display: flex; flex-direction: column; gap: 15px; padding: 15px;">
+                    <section class="col-details"
+                        style="overflow-y: auto; max-height: calc(100vh - 120px); display: flex; flex-direction: column; gap: 15px; padding: 15px;">
                         <!-- Histogram Card -->
                         <div class="metadata-card" style="margin: 0; padding: 12px;">
-                            <h3 style="margin-top: 0; margin-bottom: 8px; display: flex; justify-content: space-between;">
+                            <h3
+                                style="margin-top: 0; margin-bottom: 8px; display: flex; justify-content: space-between;">
                                 <span>Ellipticity Histogram</span>
-                                <span id="sfg-hist-stats" style="font-size: 0.75rem; color: var(--text-dim); font-weight: normal;">No data</span>
+                                <span id="sfg-hist-stats"
+                                    style="font-size: 0.75rem; color: var(--text-dim); font-weight: normal;">No
+                                    data</span>
                             </h3>
-                            <div style="position: relative; background: rgba(0,0,0,0.4); border: 1px solid var(--glass-border); border-radius: 4px; padding: 10px; height: 160px;">
-                                <canvas id="sfg-histogram-canvas" style="width: 100%; height: 100%; display: block;"></canvas>
+                            <div
+                                style="position: relative; background: rgba(0,0,0,0.4); border: 1px solid var(--glass-border); border-radius: 4px; padding: 10px; height: 160px;">
+                                <canvas id="sfg-histogram-canvas"
+                                    style="width: 100%; height: 100%; display: block;"></canvas>
                             </div>
-                            <div style="font-size: 0.7rem; color: var(--text-dim); margin-top: 4px; text-align: center;">
+                            <div
+                                style="font-size: 0.7rem; color: var(--text-dim); margin-top: 4px; text-align: center;">
                                 Click histogram to set threshold. Shaded region (≤ threshold) will be stacked.
                             </div>
                         </div>
 
-                        <!-- Stacked Result Preview Card -->
-                        <div class="preview-card" style="margin: 0; padding: 12px; flex-grow: 1; display: flex; flex-direction: column;">
-                            <h3 style="margin-top: 0; margin-bottom: 8px;">Stacked Result Preview</h3>
-                            <div id="sfg-image-preview-container" class="image-container zoomable" style="flex-grow: 1; min-height: 250px; display: flex; align-items: center; justify-content: center;">
-                                <div class="no-preview">No Stacked Image Available</div>
+                        <!-- Shooting Information Card -->
+                        <div class="preview-card"
+                            style="margin: 0; padding: 12px; flex-grow: 1; display: flex; flex-direction: column;">
+                            <h3 style="margin-top: 0; margin-bottom: 8px;">Information</h3>
+                            <div style="flex-grow: 1; overflow-y: auto;">
+                                <table class="metadata-table-sfg"
+                                    style="width: 100%; border-collapse: collapse; font-size: 0.75rem;">
+                                    <thead>
+                                        <tr style="border-bottom: 1px solid var(--glass-border); text-align: left;">
+                                            <th style="padding: 6px 4px; font-weight: 600; color: var(--text-dim);">
+                                                Items</th>
+                                            <th style="padding: 6px 4px; font-weight: 600; color: var(--text-dim);">
+                                                Stack</th>
+                                            <th style="padding: 6px 4px; font-weight: 600; color: var(--text-dim);">Dark
+                                            </th>
+                                            <th style="padding: 6px 4px; font-weight: 600; color: var(--text-dim);">Flat
+                                            </th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="sfg-shooting-info-body">
+                                        <!-- Dynamically populated -->
+                                    </tbody>
+                                </table>
                             </div>
-                            <div id="sfg-image-info" class="image-info" style="margin-top: 8px; font-size: 0.75rem; color: var(--text-dim);"></div>
-                            <div id="sfg-reports-container" class="hidden" style="margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--glass-border); font-size: 0.8rem;">
-                                <div style="font-weight: 600; margin-bottom: 4px; color: var(--accent-gold);">Generated Session Reports:</div>
+                            <div id="sfg-reports-container" class="hidden"
+                                style="margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--glass-border); font-size: 0.8rem;">
+                                <div style="font-weight: 600; margin-bottom: 4px; color: var(--accent-gold);">Generated
+                                    Session Reports:</div>
                                 <div style="display: flex; gap: 15px;">
-                                    <a href="#" id="sfg-report-md" target="_blank" style="color: var(--accent-blue); text-decoration: none;">📄 Markdown Report</a>
-                                    <a href="#" id="sfg-report-html" target="_blank" style="color: var(--accent-blue); text-decoration: none;">🌐 HTML Report</a>
+                                    <a href="#" id="sfg-report-md" target="_blank"
+                                        style="color: var(--accent-blue); text-decoration: none;">📄 Markdown Report</a>
+                                    <a href="#" id="sfg-report-html" target="_blank"
+                                        style="color: var(--accent-blue); text-decoration: none;">🌐 HTML Report</a>
                                 </div>
                             </div>
                         </div>
@@ -524,12 +664,15 @@
                 <h3>SkySolverEngine (SSE) Console</h3>
                 <button type="button" id="close-sse-modal-btn" class="close-btn">&times;</button>
             </div>
-            <div class="modal-body" style="display: flex; flex-direction: column; height: calc(100% - 130px); padding: 0;">
-                <div id="sse-terminal" class="terminal-body" style="flex-grow: 1; border-radius: 0; border: none; font-size: 0.75rem;">
+            <div class="modal-body"
+                style="display: flex; flex-direction: column; height: calc(100% - 130px); padding: 0;">
+                <div id="sse-terminal" class="terminal-body"
+                    style="flex-grow: 1; border-radius: 0; border: none; font-size: 0.75rem;">
                     <div class="log-line system">Waiting for SSE run...</div>
                 </div>
             </div>
-            <div class="modal-footer" style="padding: 1rem; border-top: 1px solid var(--glass-border); display: flex; justify-content: space-between; align-items: center;">
+            <div class="modal-footer"
+                style="padding: 1rem; border-top: 1px solid var(--glass-border); display: flex; justify-content: space-between; align-items: center;">
                 <span id="sse-modal-status" style="font-size: 0.8rem; color: var(--accent-gold);">Idle</span>
                 <button type="button" id="sse-modal-close-btn" class="btn-small">Close Window</button>
             </div>
@@ -543,12 +686,15 @@
                 <h3>Starflux Console</h3>
                 <button type="button" id="close-sf-modal-btn" class="close-btn">&times;</button>
             </div>
-            <div class="modal-body" style="display: flex; flex-direction: column; height: calc(100% - 130px); padding: 0;">
-                <div id="sf-terminal" class="terminal-body" style="flex-grow: 1; border-radius: 0; border: none; font-size: 0.75rem;">
+            <div class="modal-body"
+                style="display: flex; flex-direction: column; height: calc(100% - 130px); padding: 0;">
+                <div id="sf-terminal" class="terminal-body"
+                    style="flex-grow: 1; border-radius: 0; border: none; font-size: 0.75rem;">
                     <div class="log-line system">Waiting for Starflux run...</div>
                 </div>
             </div>
-            <div class="modal-footer" style="padding: 1rem; border-top: 1px solid var(--glass-border); display: flex; justify-content: space-between; align-items: center;">
+            <div class="modal-footer"
+                style="padding: 1rem; border-top: 1px solid var(--glass-border); display: flex; justify-content: space-between; align-items: center;">
                 <span id="sf-modal-status" style="font-size: 0.8rem; color: var(--accent-gold);">Idle</span>
                 <button type="button" id="sf-modal-close-btn" class="btn-small">Close Window</button>
             </div>
@@ -562,12 +708,15 @@
                 <h3>StarForge Stacker Console</h3>
                 <button type="button" id="close-sfg-modal-btn" class="close-btn">&times;</button>
             </div>
-            <div class="modal-body" style="display: flex; flex-direction: column; height: calc(100% - 130px); padding: 0;">
-                <div id="sfg-terminal" class="terminal-body" style="flex-grow: 1; border-radius: 0; border: none; font-size: 0.75rem;">
+            <div class="modal-body"
+                style="display: flex; flex-direction: column; height: calc(100% - 130px); padding: 0;">
+                <div id="sfg-terminal" class="terminal-body"
+                    style="flex-grow: 1; border-radius: 0; border: none; font-size: 0.75rem;">
                     <div class="log-line system">Waiting for StarForge stack...</div>
                 </div>
             </div>
-            <div class="modal-footer" style="padding: 1rem; border-top: 1px solid var(--glass-border); display: flex; justify-content: space-between; align-items: center;">
+            <div class="modal-footer"
+                style="padding: 1rem; border-top: 1px solid var(--glass-border); display: flex; justify-content: space-between; align-items: center;">
                 <span id="sfg-modal-status" style="font-size: 0.8rem; color: var(--accent-gold);">Idle</span>
                 <button type="button" id="sfg-modal-close-btn" class="btn-small">Close Window</button>
             </div>
@@ -585,4 +734,5 @@
 
     <script src="script.js"></script>
 </body>
+
 </html>
