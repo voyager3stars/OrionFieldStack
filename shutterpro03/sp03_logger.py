@@ -3,7 +3,7 @@
 # Component:    ShutterPro03 Logger & Analyzer
 # Author:       voyager3.stars
 # Web:          https://voyager3.stars.ne.jp
-# Version:      15.0.4 (JSON Log v1.6.2 Compliance)
+# Version:      15.0.5 (JSON Log v1.6.2 Compliance)
 # License:      MIT
 # Description:  Handles asynchronous image analysis and telemetry 
 #               logging. Extracts Exif metadata, merges it with 
@@ -132,6 +132,35 @@ def analyzer_worker(analysis_queue, stop_event, CONFIG):
                     if "ImageLength" in t_name or "0x0101" in t_name:
                         try: v = t_val.values[0] if isinstance(t_val.values, list) else t_val.values; all_h.append(int(v))
                         except: pass
+                
+                # Check for SubIFDs in raw images to get original resolution
+                subifd_tag = tags.get("Image SubIFDs")
+                if subifd_tag:
+                    import struct
+                    f.seek(0)
+                    header = f.read(4)
+                    endian = '<' if header[:2] == b'II' else '>'
+                    offsets = subifd_tag.values
+                    if not isinstance(offsets, list):
+                        offsets = [offsets]
+                    for offset in offsets:
+                        try:
+                            f.seek(offset)
+                            num_entries_data = f.read(2)
+                            if len(num_entries_data) == 2:
+                                num_entries = struct.unpack(f"{endian}H", num_entries_data)[0]
+                                for _ in range(num_entries):
+                                    entry_data = f.read(12)
+                                    if len(entry_data) < 12:
+                                        break
+                                    tag, tag_type, count, val_offset = struct.unpack(f"{endian}HHII", entry_data)
+                                    if tag == 256 and tag_type in (3, 4):
+                                        all_w.append(val_offset)
+                                    elif tag == 257 and tag_type in (3, 4):
+                                        all_h.append(val_offset)
+                        except:
+                            pass
+
                 if all_w and all_h: ex["w"], ex["h"] = max(all_w), max(all_h)
                 
                 iso = tags.get("EXIF ISOSpeedRatings") or tags.get("Image ISOSpeedRatings")
