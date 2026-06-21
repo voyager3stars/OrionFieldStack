@@ -10,7 +10,7 @@
 #   - ポスト処理中の latest_shot.json 汚染を防止。
 # =================================================================
 
-__version__ = "2.2.5"
+__version__ = "2.2.6"
 __json_spec__ = "1.6.2"
 
 import os
@@ -356,10 +356,19 @@ class SkySolverEngine:
         try:
             with open(latest_json, 'r', encoding='utf-8') as f:
                 data = json.load(f)
-                target_filename = data[0]["record"]["file"]["name"]
+                if isinstance(data, list):
+                    if not data:
+                        print("SSE>> [Error] latest_shot.json list is empty."); return
+                    record_root = data[0]
+                elif isinstance(data, dict):
+                    record_root = data
+                else:
+                    print("SSE>> [Error] Unsupported JSON structure."); return
+                
+                target_filename = record_root["record"]["file"]["name"]
                 target_path = os.path.join(image_dir, target_filename)
-                ra_hint = data[0]["record"]["mount"].get("ra_deg")
-                dec_hint = data[0]["record"]["mount"].get("dec_deg")
+                ra_hint = record_root["record"]["mount"].get("ra_deg")
+                dec_hint = record_root["record"]["mount"].get("dec_deg")
         except Exception as e:
             print(f"SSE>> [Error] Failed to read fingerprint: {e}"); return
 
@@ -372,10 +381,19 @@ class SkySolverEngine:
         try:
             with open(latest_json, 'r+', encoding='utf-8') as f:
                 current_data = json.load(f)
-                if current_data[0]["record"]["file"]["name"] == target_filename:
+                if isinstance(current_data, list):
+                    if not current_data:
+                        print("SSE>> [Warning] File content is empty during writing. Skipping update."); return
+                    current_record_root = current_data[0]
+                else:
+                    current_record_root = current_data
+                
+                if current_record_root["record"]["file"]["name"] == target_filename:
                     print(f"SSE>> Fingerprint match. Updating latest_shot.json.")
-                    self._apply_res_to_dict(current_data[0], res)
-                    f.seek(0); json.dump(current_data, f, indent=4, ensure_ascii=False); f.truncate()
+                    self._apply_res_to_dict(current_record_root, res)
+                    f.seek(0)
+                    json.dump(current_data, f, indent=4, ensure_ascii=False)
+                    f.truncate()
                 else:
                     print(f"SSE>> [Warning] Fingerprint mismatch! Next shot already started. Skipping update.")
             
