@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 # =================================================================
 # Project:      OrionFieldStack
-# Tool:         SkySync v2.0.2 (Core Orchestrator)
+# Tool:         SkySync v2.1.0 (Core Orchestrator)
 # Description:  
-#   v2.0.2: SSE v2.0.x のネストされたJSON構造に対応。
-#           INDI同期時のRA単位変換 (Degree to Hours) を実装。
+#   v2.1.0: JSON Spec v1.6.2 準拠のルート並列 analysis.SSE に対応。
+#           latest_shot.json のリスト形式・オブジェクト形式双方に対応。
 # =================================================================
 
-__version__ = "2.0.2"
-__json_spec__ = "1.4.2"
+__version__ = "2.1.0"
+__json_spec__ = "1.6.2"
 
 import subprocess
 import argparse
@@ -26,7 +26,7 @@ class SkySync:
         self.sse_dir = os.path.abspath(os.path.expanduser(self.config["paths"]["sse_dir"]))
         self.image_dir = os.path.abspath(os.path.expanduser(self.config["paths"]["default_image_dir"]))
         
-        # SSE v2.0.x が出力する最新解析結果 JSON
+        # SSE v2.2.x が出力する最新解析結果 JSON (Spec v1.6.2)
         self.latest_json_path = os.path.join(self.image_dir, "latest_shot.json")
         self.shutter_defaults = self.config["shutter_defaults"]
 
@@ -53,29 +53,51 @@ class SkySync:
             return False
 
     def load_latest_coords(self):
-        """SSE v2.0.x 構造の JSON から座標と解析統計を読み取る"""
+        """SSE v2.x / JSON Spec v1.6.2 構造の JSON から座標と解析統計を読み取る"""
         if not os.path.exists(self.latest_json_path):
             print(f"[Error] {self.latest_json_path} not found.")
             return None, None
 
         try:
-            with open(self.latest_json_path, 'r') as f:
+            with open(self.latest_json_path, 'r', encoding='utf-8') as f:
                 data = json.load(f)
                 
-                # latest_shot.json はリスト形式を想定。安全に取得する。
-                if not data or not isinstance(data, list):
+                # 辞書型（オブジェクト）とリスト型の両方を許容
+                if isinstance(data, list):
+                    if not data:
+                        return None, None
+                    record_root = data[0]
+                elif isinstance(data, dict):
+                    record_root = data
+                else:
                     return None, None
-                    
-                record = data[0].get("record", {})
-                ana = record.get("analysis", {})
                 
-                if ana.get("solve_status") == "success":
-                    coords = ana.get("solved_coords", {})
-                    stats = ana.get("process_stats", {})
-                    conf = ana.get("confidence", 0.0)
+                # analysis構造の取得 (並列・ネスト両対応)
+                analysis = record_root.get("analysis", {})
+                
+                # 最新構造: analysis.SSE
+                if "SSE" in analysis:
+                    sse = analysis.get("SSE", {})
+                else:
+                    # 古い構造: analysis 自体が SSE 相当の情報を持っている場合、
+                    # または record.analysis の場合
+                    if not analysis and "record" in record_root:
+                        analysis = record_root.get("record", {}).get("analysis", {})
+                    sse = analysis
+                
+                if sse.get("solve_status") == "success":
+                    coords = sse.get("solved_coords", {})
+                    stats = sse.get("process_stats", {})
+                    conf = sse.get("confidence")
+                    if conf is None:
+                        conf = 0.0
+                    else:
+                        conf = float(conf)
+                    
+                    sse_ver = sse.get("sse_version") or sse.get("version") or "Unknown"
                     
                     print(f"\n--- [SkySync Result Summary] ---")
-                    print(f" Status: SUCCESS (SSE v{ana.get('sse_version')})")
+                    print(f" Status: SUCCESS (SSE v{sse_ver})")
                     print(f" Confidence: {conf:.2f}")
                     print(f" Stars: {stats.get('matched_stars')} matched")
                     print(f" Position: RA {coords.get('ra_hms')} / Dec {coords.get('dec_dms')}")
@@ -83,7 +105,7 @@ class SkySync:
                     
                     return coords.get("ra_deg"), coords.get("dec_deg")
                 else:
-                    fail_reason = ana.get("fail_reason", "Unknown")
+                    fail_reason = sse.get("fail_reason") or sse.get("solve_status") or "Unknown"
                     print(f"[SkySync] Solve failed or pending. Reason: {fail_reason}")
                     return None, None
         except Exception as e:

@@ -1,19 +1,19 @@
-# 🛰️ SkySync v2.0.2 - Observation Sequence Manager
+# 🛰️ SkySync v2.1.0 - Observation Sequence Manager
 SkySyncは、OrionFieldStackシステムにおける撮影（ShutterPro）、プレートソルブ（SSE）、そして架台の同期（INDI）を一つの流れ（シーケンス）として統合するメインコントローラーです。
 ## 🛠️ 主な機能
 * ワンストップ・ワークフロー: 撮影から解析、架台への座標同期までを全自動で実行します。
-* 高度な解析連携: SSE v2.0.x が出力する最新の latest_shot.json を読み取り、解析結果を即座に反映します。
+* 高度な解析連携: SSE v2.2.x / JSON Spec v1.6.2 に対応。`latest_shot.json` のリスト形式および単一オブジェクト形式の双方をサポートし、旧ネスト構造との互換性も維持しています。
 * INDIマウント同期: 解析された度（Degree）単位の座標を、INDI標準の時（Hours）単位へ自動変換して架台へ送信します。
 * 柔軟な運用モード: 撮影からのフル自動、既存画像の解析・同期、または座標の直接指定に対応しています。
  ## 🏗️ 観測シーケンスの全体図
 SkySyncがハブとなり、各コンポーネントを繋いで観測を進行させます。
  ```mermaid
  graph LR
-    User([ユーザー]) --> SkySync[SkySync v2.0.2]
+    User([ユーザー]) --> SkySync[SkySync v2.1.0]
     
     subgraph "Capture & Solve"
         SkySync --> ShutterPro[shutterpro03.py<br/>画像撮影]
-        ShutterPro --> SSE[SSE.py<br/>プレートゾルブ]
+        ShutterPro --> SSE[SSE.py<br/>プレートソルブ]
     end
     
     subgraph "Synchronization"
@@ -65,7 +65,18 @@ python3 skysync.py manual --ra 83.82 --dec -5.39
 $$RA_{hours} = \frac{RA_{deg}}{15.0}$$
 Note: 浮動小数点は第8位まで精度を保持して計算されます。
 ## 📋 必要条件
-* INDI Library: indi_setprop が動作する環境であること。
+* INDI Library: `indi_setprop` が動作する環境であること。
 * Python 3.x: 仮想環境（venv）の使用を推奨。
 
-#### ⚖️ License© 2026 OrionFieldStack Project / MIT License
+## 📝 変更履歴
+
+* **v2.1.0** (2026-06-21)
+  - JSON Spec v1.6.2 に準拠したルート並列の `analysis.SSE` 構造に対応。
+  - `latest_shot.json` のアウターコンテナ構造（単一オブジェクト形式／リスト形式）の自動識別をサポート。
+  - 旧仕様のネスト構造（`record.analysis`）に対する後方互換性を保持。
+* **v2.0.2**
+  - SSE v2.0.x のネストされたJSON構造に対応。
+  - INDI同期時のRA単位変換（Degrees to Hours）を実装。
+
+## ⚖️ License
+© 2026 OrionFieldStack Project / MIT License
