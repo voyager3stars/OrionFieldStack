@@ -4,6 +4,7 @@ import signal
 import sys
 import json
 import io
+from datetime import datetime, timezone
 from fastapi import FastAPI, Form, HTTPException, Request
 from fastapi.responses import StreamingResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -37,12 +38,17 @@ starflux_process_lock = asyncio.Lock()
 starforge_process = None
 starforge_process_lock = asyncio.Lock()
 
+# Sync process
+sync_process = None
+sync_process_lock = asyncio.Lock()
+
 # Paths
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SHUTTERPRO_PATH = os.path.join(BASE_DIR, "shutterpro03", "shutterpro03.py")
 SSE_PATH = os.path.join(BASE_DIR, "SSE", "SSE.py")
 STARFLUX_PATH = os.path.join(BASE_DIR, "starflux", "starflux.py")
 STARFORGE_PATH = os.path.join(BASE_DIR, "starforge", "starforge.py")
+SKYSYNC_PATH = os.path.join(BASE_DIR, "skysync", "skysync.py")
 GUI_CONFIG_PATH = os.path.join(os.path.dirname(__file__), "ofs_gui_sp03_config.json")
 
 def get_sse_python():
@@ -64,6 +70,107 @@ def get_starforge_python():
     if os.path.exists(venv_python):
         return venv_python
     return sys.executable
+
+
+def get_ofs_link_python():
+    # Use the ofs_link virtual environment if available to run ofs_link
+    venv_python = os.path.join(BASE_DIR, "ofs_link", "venv", "bin", "python")
+    if os.path.exists(venv_python):
+        return venv_python
+    return sys.executable
+
+
+# Global telemetry cache
+latest_telemetry = {
+    "indi_server": "DISCONNECTED",
+    "status": "UNKNOWN",
+    "ra_deg": None,
+    "dec_deg": None,
+    "ra_str": None,
+    "dec_str": None,
+    "side_of_pier": "UNKNOWN",
+    "latitude": None,
+    "longitude": None,
+    "elevation": None,
+    "timestamp_utc": None,
+    "iso_timestamp": None
+}
+
+latest_flashair = {
+    "flashair": "DISCONNECTED",
+    "url": "http://192.168.50.200"
+}
+
+
+async def update_telemetry_loop():
+    global latest_telemetry
+    ofs_link_py = os.path.join(BASE_DIR, "ofs_link", "ofs_link.py")
+    python_exe = get_ofs_link_python()
+    
+    while True:
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                python_exe, ofs_link_py, "--get",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
+            )
+            stdout, stderr = await proc.communicate()
+            if proc.returncode == 0:
+                try:
+                    data = json.loads(stdout.decode().strip())
+                    latest_telemetry = data
+                except Exception as ex:
+                    latest_telemetry["status"] = "PARSE_ERROR"
+            else:
+                latest_telemetry["indi_server"] = "DISCONNECTED"
+                latest_telemetry["status"] = "ERROR"
+        except Exception as e:
+            latest_telemetry["indi_server"] = "DISCONNECTED"
+            latest_telemetry["status"] = f"ERROR: {str(e)}"
+        
+        await asyncio.sleep(1.0)
+
+
+async def update_flashair_loop():
+    global latest_flashair
+    ofs_link_py = os.path.join(BASE_DIR, "ofs_link", "ofs_link.py")
+    python_exe = get_ofs_link_python()
+    
+    while True:
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                python_exe, ofs_link_py, "--flashair",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
+            )
+            stdout, stderr = await proc.communicate()
+            if proc.returncode == 0:
+                try:
+                    data = json.loads(stdout.decode().strip())
+                    latest_flashair = data
+                except Exception as ex:
+                    latest_flashair = {
+                        "flashair": "DISCONNECTED",
+                        "url": "http://192.168.50.200"
+                    }
+            else:
+                latest_flashair = {
+                    "flashair": "DISCONNECTED",
+                    "url": "http://192.168.50.200"
+                }
+        except Exception as e:
+            latest_flashair = {
+                "flashair": "DISCONNECTED",
+                "url": "http://192.168.50.200"
+            }
+        
+        await asyncio.sleep(10.0)
+
+
+@app.on_event("startup")
+async def startup_event():
+    asyncio.create_task(update_telemetry_loop())
+    asyncio.create_task(update_flashair_loop())
 
 
 
@@ -158,6 +265,32 @@ async def get_status():
     if running_process and running_process.returncode is None:
         return {"status": "running"}
     return {"status": "idle"}
+
+
+@app.get("/api/telemetry")
+async def get_telemetry(mock: bool = False):
+    global latest_telemetry, latest_flashair
+    if mock:
+        return {
+            "indi_server": "CONNECTED",
+            "status": "IDLE",
+            "ra_deg": 261.6375,
+            "dec_deg": 90.0,
+            "ra_str": "17h26m33s",
+            "dec_str": "+90°00'00\"",
+            "side_of_pier": "EAST",
+            "latitude": 34.6493,
+            "longitude": 135.0015,
+            "elevation": 54.0,
+            "timestamp_utc": datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3] + "Z",
+            "iso_timestamp": datetime.now().astimezone().isoformat(),
+            "flashair": "CONNECTED",
+            "flashair_url": "http://192.168.50.200"
+        }
+    res = dict(latest_telemetry)
+    res["flashair"] = latest_flashair.get("flashair", "DISCONNECTED")
+    res["flashair_url"] = latest_flashair.get("url", "http://192.168.50.200")
+    return res
 
 # --- SSE APIs ---
 
@@ -632,6 +765,168 @@ except Exception as e:
         return StreamingResponse(io.BytesIO(stdout), media_type="image/jpeg")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error running conversion: {str(e)}")
+
+
+# --- Sync APIs ---
+
+@app.post("/api/sync/flow/start")
+async def start_sync_flow(request: Request):
+    global sync_process
+    async with sync_process_lock:
+        if sync_process and sync_process.returncode is None:
+            raise HTTPException(status_code=400, detail="Sync flow is already running.")
+
+        form_data = await request.form()
+        exposure = form_data.get("exposure", "5.0")
+        count = form_data.get("count", "1")
+        shutter_mode = form_data.get("mode", "bulb")
+        save_dir = form_data.get("save_dir", "~/Pictures/sync")
+        session = form_data.get("session", "sync")
+
+        # solve モードで実行（自動同期なし、撮影＋ゾルブのみ）
+        cmd = [
+            sys.executable, "-u", SKYSYNC_PATH, "solve",
+            "--exposure", exposure,
+            "--count", count,
+            "--shutter-mode", shutter_mode,
+            "--dir", save_dir,
+            "--session", session
+        ]
+
+        try:
+            env = os.environ.copy()
+            env["PYTHONUNBUFFERED"] = "1"
+            
+            sync_process = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.STDOUT,
+                cwd=os.path.join(BASE_DIR, "skysync"),
+                env=env
+            )
+            return {"status": "started", "pid": sync_process.pid}
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/sync/flow/logs")
+async def stream_sync_logs():
+    async def log_generator():
+        global sync_process
+        if not sync_process:
+            yield "data: No Sync process running\n\n"
+            return
+
+        try:
+            while True:
+                line = await sync_process.stdout.readline()
+                if not line:
+                    break
+                yield f"data: {line.decode('utf-8', errors='replace')}\n\n"
+        except Exception as e:
+            yield f"data: Log stream error: {str(e)}\n\n"
+        
+        yield "data: [Process Finished]\n\n"
+
+    return StreamingResponse(log_generator(), media_type="text/event-stream")
+
+
+@app.post("/api/sync/flow/stop")
+async def stop_sync_flow():
+    global sync_process
+    async with sync_process_lock:
+        if sync_process and sync_process.returncode is None:
+            sync_process.terminate()
+            return {"status": "stopping"}
+        return {"status": "not running"}
+
+
+@app.get("/api/sync/flow/status")
+async def get_sync_status():
+    global sync_process
+    if sync_process and sync_process.returncode is None:
+        return {"status": "running"}
+    return {"status": "idle"}
+
+
+@app.get("/api/sync/flow/result")
+async def get_sync_result(save_dir: str = "~/Pictures/sync"):
+    abs_dir = os.path.abspath(os.path.expanduser(save_dir))
+    latest_json_path = os.path.join(abs_dir, "latest_shot.json")
+    
+    if not os.path.exists(latest_json_path):
+        raise HTTPException(status_code=404, detail=f"{latest_json_path} not found.")
+
+    try:
+        with open(latest_json_path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+            
+            if isinstance(data, list):
+                if not data:
+                    raise HTTPException(status_code=404, detail="Empty data array.")
+                record_root = data[0]
+            elif isinstance(data, dict):
+                record_root = data
+            else:
+                raise HTTPException(status_code=400, detail="Invalid JSON format.")
+            
+            analysis = record_root.get("analysis", {})
+            if "SSE" in analysis:
+                sse = analysis.get("SSE", {})
+            else:
+                if not analysis and "record" in record_root:
+                    analysis = record_root.get("record", {}).get("analysis", {})
+                sse = analysis
+            
+            if sse.get("solve_status") == "success":
+                coords = sse.get("solved_coords", {})
+                stats = sse.get("process_stats", {})
+                conf = sse.get("confidence", 0.0)
+                
+                return {
+                    "solve_status": "success",
+                    "ra_deg": coords.get("ra_deg"),
+                    "dec_deg": coords.get("dec_deg"),
+                    "ra_hms": coords.get("ra_hms"),
+                    "dec_dms": coords.get("dec_dms"),
+                    "confidence": conf,
+                    "matched_stars": stats.get("matched_stars"),
+                    "process_time": sse.get("process_time_sec")
+                }
+            else:
+                fail_reason = sse.get("fail_reason") or sse.get("solve_status") or "Unknown"
+                return {
+                    "solve_status": "failed",
+                    "fail_reason": fail_reason
+                }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to parse latest_shot.json: {str(e)}")
+
+
+@app.post("/api/sync/indi")
+async def sync_indi(request: Request):
+    form_data = await request.form()
+    ra = form_data.get("ra")
+    dec = form_data.get("dec")
+    if ra is None or dec is None:
+        raise HTTPException(status_code=400, detail="RA and DEC are required.")
+    
+    cmd = [sys.executable, SKYSYNC_PATH, "manual", "--ra", str(ra), "--dec", str(dec)]
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            cwd=os.path.join(BASE_DIR, "skysync")
+        )
+        stdout, stderr = await proc.communicate()
+        if proc.returncode == 0:
+            return {"status": "success", "output": stdout.decode()}
+        else:
+            raise HTTPException(status_code=500, detail=stderr.decode() or "INDI setprop failed.")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 # Serve static files
 app.mount("/", StaticFiles(directory=os.path.join(os.path.dirname(__file__), "static"), html=True), name="static")

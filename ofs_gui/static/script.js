@@ -79,6 +79,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     initFolderPicker('browse-dir-btn', 'save_dir');
     initFolderPicker('browse-log-path-btn', 'log-path');
+    initFolderPicker('browse-sync-dir-btn', 'sync-save-dir');
 
     closePickerBtn.onclick = () => pickerModal.classList.add('hidden');
     confirmPickerBtn.onclick = () => {
@@ -864,8 +865,463 @@ document.addEventListener('DOMContentLoaded', () => {
     sfModalCloseBtn.onclick = () => sfConsoleModal.classList.add('hidden');
 
 
+    // --- Telemetry Polling ---
+    async function updateTelemetry() {
+        try {
+            const resp = await fetch('/api/telemetry');
+            if (!resp.ok) return;
+            const data = await resp.json();
+            
+            // 1. INDI Status
+            const serverEl = document.getElementById('tel-indi-server');
+            const syncServerEl = document.getElementById('sync-tel-indi-server');
+            const srv = data.indi_server || 'DISCONNECTED';
+            const srvClass = `telemetry-val badge ${srv.toUpperCase() === 'CONNECTED' ? 'connected' : 'disconnected'}`;
+            if (serverEl) {
+                serverEl.textContent = srv;
+                serverEl.className = srvClass;
+            }
+            if (syncServerEl) {
+                syncServerEl.textContent = srv;
+                syncServerEl.className = srvClass;
+            }
+            
+            const statusEl = document.getElementById('tel-indi-status');
+            const syncStatusEl = document.getElementById('sync-tel-indi-status');
+            const status = data.status || 'UNKNOWN';
+            const statusClass = `telemetry-val status-badge ${status.toLowerCase()}`;
+            if (statusEl) {
+                statusEl.textContent = status;
+                statusEl.className = statusClass;
+            }
+            if (syncStatusEl) {
+                syncStatusEl.textContent = status;
+                syncStatusEl.className = statusClass;
+            }
+            
+            // 2. Time
+            const localEl = document.getElementById('tel-time-local');
+            const syncLocalEl = document.getElementById('sync-tel-time-local');
+            if ((localEl || syncLocalEl) && data.iso_timestamp) {
+                let formattedLocal = data.iso_timestamp;
+                const tIndex = data.iso_timestamp.indexOf('T');
+                if (tIndex !== -1) {
+                    const timePart = data.iso_timestamp.slice(tIndex + 1, tIndex + 9);
+                    const tzPart = data.iso_timestamp.slice(tIndex + 13);
+                    formattedLocal = `${timePart} (${tzPart})`;
+                }
+                if (localEl) localEl.textContent = formattedLocal;
+                if (syncLocalEl) syncLocalEl.textContent = formattedLocal;
+            }
+            
+            const utcEl = document.getElementById('tel-time-utc');
+            const syncUtcEl = document.getElementById('sync-tel-time-utc');
+            if ((utcEl || syncUtcEl) && data.timestamp_utc) {
+                let formattedUtc = data.timestamp_utc;
+                const tIndex = data.timestamp_utc.indexOf('T');
+                if (tIndex !== -1) {
+                    formattedUtc = data.timestamp_utc.slice(tIndex + 1, tIndex + 9) + ' UTC';
+                }
+                if (utcEl) utcEl.textContent = formattedUtc;
+                if (syncUtcEl) syncUtcEl.textContent = formattedUtc;
+            }
+            
+            // 3. GPS
+            const coordsEl = document.getElementById('tel-gps-coords');
+            const syncCoordsEl = document.getElementById('sync-tel-gps-coords');
+            if (coordsEl || syncCoordsEl) {
+                let formattedCoords = 'N/A';
+                if (data.latitude !== null && data.longitude !== null && data.latitude !== undefined && data.longitude !== undefined) {
+                    formattedCoords = `${Number(data.latitude).toFixed(4)}°, ${Number(data.longitude).toFixed(4)}°`;
+                }
+                if (coordsEl) coordsEl.textContent = formattedCoords;
+                if (syncCoordsEl) syncCoordsEl.textContent = formattedCoords;
+            }
+            
+            const elevEl = document.getElementById('tel-gps-elev');
+            const syncElevEl = document.getElementById('sync-tel-gps-elev');
+            if (elevEl || syncElevEl) {
+                let formattedElev = 'N/A';
+                if (data.elevation !== null && data.elevation !== undefined) {
+                    formattedElev = `${Number(data.elevation).toFixed(1)} m`;
+                }
+                if (elevEl) elevEl.textContent = formattedElev;
+                if (syncElevEl) syncElevEl.textContent = formattedElev;
+            }
+            
+            // 4. Orientation
+            const orientCoordsEl = document.getElementById('tel-orient-coords');
+            const syncOrientCoordsEl = document.getElementById('sync-tel-orient-coords');
+            if (orientCoordsEl || syncOrientCoordsEl) {
+                let formattedOrient = 'N/A';
+                if (data.ra_str && data.dec_str) {
+                    formattedOrient = `RA ${data.ra_str}, DEC ${data.dec_str}`;
+                } else if (data.ra_deg !== null && data.dec_deg !== null && data.ra_deg !== undefined && data.dec_deg !== undefined) {
+                    formattedOrient = `${Number(data.ra_deg).toFixed(4)}°, ${Number(data.dec_deg).toFixed(4)}°`;
+                }
+                if (orientCoordsEl) orientCoordsEl.textContent = formattedOrient;
+                if (syncOrientCoordsEl) syncOrientCoordsEl.textContent = formattedOrient;
+            }
+            
+            const pierEl = document.getElementById('tel-orient-pier');
+            const syncPierEl = document.getElementById('sync-tel-orient-pier');
+            const pier = data.side_of_pier || 'UNKNOWN';
+            const pierClass = `telemetry-val status-badge ${pier.toLowerCase()}`;
+            if (pierEl) {
+                pierEl.textContent = pier;
+                pierEl.className = pierClass;
+            }
+            if (syncPierEl) {
+                syncPierEl.textContent = pier;
+                syncPierEl.className = pierClass;
+            }
+
+            // 5. FlashAir
+            const faStatusEl = document.getElementById('tel-flashair-status');
+            const syncFaStatusEl = document.getElementById('sync-tel-flashair-status');
+            const faStatus = data.flashair || 'DISCONNECTED';
+            const faStatusClass = `telemetry-val badge ${faStatus.toUpperCase() === 'CONNECTED' ? 'connected' : 'disconnected'}`;
+            if (faStatusEl) {
+                faStatusEl.textContent = faStatus;
+                faStatusEl.className = faStatusClass;
+            }
+            if (syncFaStatusEl) {
+                syncFaStatusEl.textContent = faStatus;
+                syncFaStatusEl.className = faStatusClass;
+            }
+
+            const faUrlEl = document.getElementById('tel-flashair-url');
+            const syncFaUrlEl = document.getElementById('sync-tel-flashair-url');
+            const faUrl = data.flashair_url || '-';
+            const faUrlText = faUrl !== '-' ? faUrl.replace(/^https?:\/\//, '') : '-';
+
+            if (faUrlEl) {
+                faUrlEl.textContent = faUrlText;
+                if (faUrl !== '-') {
+                    faUrlEl.href = faUrl;
+                    faUrlEl.style.pointerEvents = 'auto';
+                } else {
+                    faUrlEl.removeAttribute('href');
+                    faUrlEl.style.pointerEvents = 'none';
+                }
+            }
+            if (syncFaUrlEl) {
+                syncFaUrlEl.textContent = faUrlText;
+                if (faUrl !== '-') {
+                    syncFaUrlEl.href = faUrl;
+                    syncFaUrlEl.style.pointerEvents = 'auto';
+                } else {
+                    syncFaUrlEl.removeAttribute('href');
+                    syncFaUrlEl.style.pointerEvents = 'none';
+                }
+            }
+        } catch (e) {
+            console.error('Telemetry fetch error', e);
+        }
+    }
+
+
+    // =========================================================================
+    // SYNC TAB LOGIC
+    // =========================================================================
+    const syncFlowForm = document.getElementById('sync-flow-form');
+    const syncFlowStartBtn = document.getElementById('sync-flow-start-btn');
+    const syncFlowStopBtn = document.getElementById('sync-flow-stop-btn');
+    const syncTerminal = document.getElementById('sync-terminal');
+    const clearSyncLogBtn = document.getElementById('clear-sync-log');
+    
+    const syncStatLabel = document.getElementById('sync-stat-label');
+    const syncStatTask = document.getElementById('sync-stat-task');
+    
+    const syncResStatus = document.getElementById('sync-res-status');
+    const syncResConf = document.getElementById('sync-res-conf');
+    const syncResStars = document.getElementById('sync-res-stars');
+    const syncResTime = document.getElementById('sync-res-time');
+    const syncResRaHms = document.getElementById('sync-res-ra-hms');
+    const syncResDecDms = document.getElementById('sync-res-dec-dms');
+    
+    const syncManualForm = document.getElementById('sync-manual-form');
+    const syncManualRaInput = document.getElementById('sync-manual-ra');
+    const syncManualDecInput = document.getElementById('sync-manual-dec');
+    const syncManualBtn = document.getElementById('sync-manual-btn');
+
+    let syncEventSource = null;
+
+    const syncManualRaConverted = document.getElementById('sync-manual-ra-converted');
+    const syncManualDecConverted = document.getElementById('sync-manual-dec-converted');
+
+    function degToHms(raDeg) {
+        if (raDeg === undefined || raDeg === null || raDeg === '') return '--h--m--s';
+        const val = parseFloat(raDeg);
+        if (isNaN(val)) return '--h--m--s';
+        let raHours = (val % 360) / 15.0;
+        if (raHours < 0) raHours += 24.0;
+        const h = Math.floor(raHours);
+        const mVal = (raHours - h) * 60;
+        const m = Math.floor(mVal);
+        const s = Math.round((mVal - m) * 60);
+        
+        let finalH = h;
+        let finalM = m;
+        let finalS = s;
+        if (finalS >= 60) {
+            finalS -= 60;
+            finalM += 1;
+        }
+        if (finalM >= 60) {
+            finalM -= 60;
+            finalH = (finalH + 1) % 24;
+        }
+        
+        return `${String(finalH).padStart(2, '0')}h${String(finalM).padStart(2, '0')}m${String(finalS).padStart(2, '0')}s`;
+    }
+
+    function degToDms(decDeg) {
+        if (decDeg === undefined || decDeg === null || decDeg === '') return `--°--'--"`;
+        const val = parseFloat(decDeg);
+        if (isNaN(val)) return `--°--'--"`;
+        const sign = val >= 0 ? '+' : '-';
+        const absVal = Math.abs(val);
+        const d = Math.floor(absVal);
+        const mVal = (absVal - d) * 60;
+        const m = Math.floor(mVal);
+        const s = Math.round((mVal - m) * 60);
+        
+        let finalD = d;
+        let finalM = m;
+        let finalS = s;
+        if (finalS >= 60) {
+            finalS -= 60;
+            finalM += 1;
+        }
+        if (finalM >= 60) {
+            finalM -= 60;
+            finalD += 1;
+        }
+        
+        return `${sign}${String(finalD).padStart(2, '0')}°${String(finalM).padStart(2, '0')}'${String(finalS).padStart(2, '0')}"`;
+    }
+
+    function updateManualConvertedRA() {
+        if (syncManualRaConverted) {
+            syncManualRaConverted.textContent = degToHms(syncManualRaInput.value);
+        }
+    }
+
+    function updateManualConvertedDEC() {
+        if (syncManualDecConverted) {
+            syncManualDecConverted.textContent = degToDms(syncManualDecInput.value);
+        }
+    }
+
+    if (syncManualRaInput) {
+        syncManualRaInput.addEventListener('input', updateManualConvertedRA);
+    }
+    if (syncManualDecInput) {
+        syncManualDecInput.addEventListener('input', updateManualConvertedDEC);
+    }
+
+    function addSyncTerminalLog(text, type = '') {
+        const cleanText = stripAnsi(text).trim();
+        if (!cleanText) return;
+        const div = document.createElement('div');
+        div.className = `log-line ${type}`;
+        if (cleanText.includes('SUCCESS') || cleanText.includes('solved') || cleanText.includes('Complete') || cleanText.includes('Result Summary')) div.classList.add('shutter-on');
+        if (cleanText.toLowerCase().includes('error') || cleanText.toLowerCase().includes('fail')) div.classList.add('error');
+        div.textContent = cleanText;
+        syncTerminal.appendChild(div);
+        syncTerminal.scrollTop = syncTerminal.scrollHeight;
+    }
+
+    function updateSyncDashboard(line) {
+        const cleanLine = stripAnsi(line);
+        if (cleanLine.includes('Executing:')) {
+            if (cleanLine.includes('shutterpro03.py')) {
+                syncStatLabel.textContent = 'EXPOSING';
+                syncStatLabel.className = 'badge exposing';
+                syncStatTask.textContent = 'Shooting with shutterpro03...';
+            } else if (cleanLine.includes('SSE.py')) {
+                syncStatLabel.textContent = 'SOLVING';
+                syncStatLabel.className = 'badge exposing';
+                syncStatTask.textContent = 'Solving plate with SSE...';
+            }
+        }
+        if (cleanLine.includes('--- [SkySync Result Summary] ---')) {
+            syncStatLabel.textContent = 'SOLVED';
+            syncStatLabel.className = 'badge connected';
+            syncStatTask.textContent = 'Plate solved successfully!';
+        }
+        if (cleanLine.includes('Solve failed')) {
+            syncStatLabel.textContent = 'FAILED';
+            syncStatLabel.className = 'badge disconnected';
+            syncStatTask.textContent = 'Solve failed.';
+        }
+    }
+
+    function setSyncFlowStatus(running) {
+        if (running) {
+            syncFlowStartBtn.disabled = true;
+            syncFlowStopBtn.disabled = false;
+        } else {
+            syncFlowStartBtn.disabled = false;
+            syncFlowStopBtn.disabled = true;
+        }
+    }
+
+    function startSyncLogStream() {
+        if (syncEventSource) syncEventSource.close();
+        syncEventSource = new EventSource('/api/sync/flow/logs');
+        syncEventSource.onmessage = (event) => {
+            if (event.data === '[Process Finished]') {
+                setSyncFlowStatus(false);
+                syncEventSource.close();
+                addSyncTerminalLog('--- Sync Flow Finished ---', 'system');
+                fetchSyncResult();
+            } else {
+                addSyncTerminalLog(event.data);
+                updateSyncDashboard(event.data);
+            }
+        };
+        syncEventSource.onerror = () => {
+            setSyncFlowStatus(false);
+            syncEventSource.close();
+            addSyncTerminalLog('>>> Connection lost or Sync Flow process ended.', 'error');
+            fetchSyncResult();
+        };
+    }
+
+    async function fetchSyncResult() {
+        const saveDir = document.getElementById('sync-save-dir').value;
+        try {
+            const resp = await fetch(`/api/sync/flow/result?save_dir=${encodeURIComponent(saveDir)}`);
+            if (resp.ok) {
+                const data = await resp.json();
+                if (data.solve_status === 'success') {
+                    syncResStatus.textContent = 'SUCCESS';
+                    syncResStatus.style.color = '#00ff88';
+                    syncResConf.textContent = data.confidence.toFixed(2);
+                    syncResStars.textContent = data.matched_stars;
+                    syncResTime.textContent = `${data.process_time}s`;
+                    syncResRaHms.textContent = data.ra_hms;
+                    syncResDecDms.textContent = data.dec_dms;
+                    
+                    syncManualRaInput.value = data.ra_deg.toFixed(6);
+                    syncManualDecInput.value = data.dec_deg.toFixed(6);
+                    updateManualConvertedRA();
+                    updateManualConvertedDEC();
+                    
+                    syncStatLabel.textContent = 'SOLVED';
+                    syncStatLabel.className = 'badge connected';
+                    syncStatTask.textContent = 'Solved! Review coordinates and sync to INDI.';
+                } else {
+                    syncResStatus.textContent = 'FAILED';
+                    syncResStatus.style.color = 'var(--accent-red)';
+                    syncResConf.textContent = 'N/A';
+                    syncResStars.textContent = 'N/A';
+                    syncResTime.textContent = 'N/A';
+                    syncResRaHms.textContent = 'N/A';
+                    syncResDecDms.textContent = 'N/A';
+                    
+                    syncStatLabel.textContent = 'FAILED';
+                    syncStatLabel.className = 'badge disconnected';
+                    syncStatTask.textContent = `Solve failed: ${data.fail_reason}`;
+                }
+            } else {
+                const err = await resp.json();
+                addSyncTerminalLog(`Failed to fetch result: ${err.detail}`, 'error');
+            }
+        } catch (e) {
+            addSyncTerminalLog(`Error fetching result: ${e.message}`, 'error');
+        }
+    }
+
+    syncFlowStartBtn.onclick = async () => {
+        const formData = new FormData(syncFlowForm);
+        syncStatLabel.textContent = 'RUNNING';
+        syncStatLabel.className = 'badge exposing';
+        syncStatTask.textContent = 'Starting sync flow...';
+        syncTerminal.innerHTML = '';
+        
+        try {
+            addSyncTerminalLog('>>> Starting Sync Flow...', 'system');
+            const resp = await fetch('/api/sync/flow/start', { method: 'POST', body: formData });
+            if (resp.ok) {
+                setSyncFlowStatus(true);
+                startSyncLogStream();
+            } else {
+                const err = await resp.json();
+                addSyncTerminalLog(`ERROR: ${err.detail}`, 'error');
+                syncStatLabel.textContent = 'FAILED';
+                syncStatLabel.className = 'badge disconnected';
+                syncStatTask.textContent = `Start error: ${err.detail}`;
+            }
+        } catch (e) {
+            addSyncTerminalLog(`Connection Error: ${e.message}`, 'error');
+        }
+    };
+
+    syncFlowStopBtn.onclick = async () => {
+        try {
+            addSyncTerminalLog('>>> Aborting sync flow...', 'system');
+            await fetch('/api/sync/flow/stop', { method: 'POST' });
+        } catch (e) {
+            addSyncTerminalLog(`Abort failed: ${e.message}`, 'error');
+        }
+    };
+
+    clearSyncLogBtn.onclick = () => {
+        syncTerminal.innerHTML = '';
+        addSyncTerminalLog('Sync Console cleared.', 'system');
+    };
+
+    syncManualBtn.onclick = async () => {
+        const raVal = syncManualRaInput.value;
+        const decVal = syncManualDecInput.value;
+        if (!raVal || !decVal) {
+            alert('RA and DEC values are required.');
+            return;
+        }
+        
+        const formData = new FormData();
+        formData.append('ra', raVal);
+        formData.append('dec', decVal);
+        
+        syncStatLabel.textContent = 'SYNCING';
+        syncStatLabel.className = 'badge waiting';
+        syncStatTask.textContent = 'Syncing coordinates to INDI...';
+        addSyncTerminalLog(`>>> Syncing to INDI (RA: ${raVal}, Dec: ${decVal})...`, 'system');
+        
+        try {
+            const resp = await fetch('/api/sync/indi', { method: 'POST', body: formData });
+            if (resp.ok) {
+                const resData = await resp.json();
+                addSyncTerminalLog('>>> INDI Sync Complete!', 'system');
+                if (resData.output) {
+                    addSyncTerminalLog(resData.output);
+                }
+                syncStatLabel.textContent = 'SYNCED';
+                syncStatLabel.className = 'badge connected';
+                syncStatTask.textContent = 'Coordinates successfully synced to INDI!';
+            } else {
+                const err = await resp.json();
+                addSyncTerminalLog(`Sync Error: ${err.detail}`, 'error');
+                syncStatLabel.textContent = 'SYNC FAILED';
+                syncStatLabel.className = 'badge disconnected';
+                syncStatTask.textContent = `Sync failed: ${err.detail}`;
+            }
+        } catch (e) {
+            addSyncTerminalLog(`Sync Connection Error: ${e.message}`, 'error');
+            syncStatLabel.textContent = 'SYNC FAILED';
+            syncStatLabel.className = 'badge disconnected';
+            syncStatTask.textContent = `Sync connection error: ${e.message}`;
+        }
+    };
+
+
     // --- Init ---
     loadGuiConfig();
+    updateTelemetry();
+    setInterval(updateTelemetry, 1000);
     (async () => {
         try {
             const resp = await fetch('/api/status');
