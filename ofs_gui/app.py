@@ -928,8 +928,25 @@ async def sync_indi(request: Request):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get("/api/starforge/stacked_fits")
+async def get_stacked_fits(dir: str, type: str):
+    abs_dir = os.path.abspath(os.path.expanduser(dir))
+    if not os.path.exists(abs_dir):
+        return []
+        
+    fits = []
+    prefix = f"master_{type}_"
+    try:
+        for f in os.listdir(abs_dir):
+            if f.startswith(prefix) and f.lower().endswith(('.fits', '.fit')):
+                fits.append(f)
+    except Exception:
+        pass
+    return list(set(fits))
+
+
 @app.get("/api/starforge/flat_view")
-async def starforge_flat_view(dir: str, session: str = "", file: str = ""):
+async def starforge_flat_view(dir: str, session: str = "", file: str = "", out_dir: str = ""):
     abs_dir = os.path.abspath(os.path.expanduser(dir))
     log_file = os.path.join(abs_dir, "shutter_log.json")
     
@@ -960,17 +977,55 @@ async def starforge_flat_view(dir: str, session: str = "", file: str = ""):
                     file_options.append(f)
                     file_map[f] = full_p
                     
-    if not file_options:
+    stacked_files = []
+    search_dirs = []
+    if out_dir:
+        search_dirs.append(os.path.abspath(os.path.expanduser(out_dir)))
+    search_dirs.append(abs_dir)
+    
+    # Remove duplicates
+    search_dirs = list(dict.fromkeys(search_dirs))
+    
+    for s_dir in search_dirs:
+        if os.path.exists(s_dir):
+            prefix = "master_flat_"
+            try:
+                for f in os.listdir(s_dir):
+                    if f.startswith(prefix) and f.lower().endswith(('.fits', '.fit')):
+                        if not session or f"_{session}" in f:
+                            if f not in stacked_files:
+                                stacked_files.append(f)
+                                if f not in file_map:
+                                    file_map[f] = os.path.join(s_dir, f)
+            except Exception:
+                pass
+
+    if not file_options and not stacked_files:
         from fastapi.responses import HTMLResponse
         return HTMLResponse("<html><body><h3>Error: No flat images found in the specified directory/session.</h3></body></html>", status_code=404)
 
-    selected_filename = file if file and file in file_map else file_options[0]
+    if file and file in file_map:
+        selected_filename = file
+    elif stacked_files:
+        selected_filename = stacked_files[0]
+    else:
+        selected_filename = file_options[0]
+
     target_file = file_map[selected_filename]
     
     options_html = ""
+    if stacked_files:
+        options_html += '<div class="list-title" style="padding: 6px 10px;">STACKED FILE</div>\n'
+        for sf in stacked_files:
+            sel = " selected" if sf == selected_filename else ""
+            options_html += f"""<div class="list-item{sel}" onclick="changeFile('{sf}')"><div class="file-name" style="color: var(--accent-gold); font-weight: 600;">{sf}</div></div>\n"""
+        options_html += '<div class="list-title" style="margin-top: 8px; border-top: 1px solid var(--glass-border); padding: 6px 10px;">FILES</div>\n'
+    else:
+        options_html += '<div class="list-title" style="padding: 6px 10px;">FILES</div>\n'
+
     for opt in file_options:
         sel = " selected" if opt == selected_filename else ""
-        options_html += f'<div class="list-item{sel}" onclick="changeFile(\'{opt}\')"><div class="file-name">{opt}</div></div>'
+        options_html += f"""<div class="list-item{sel}" onclick="changeFile('{opt}')"><div class="file-name">{opt}</div></div>\n"""
 
     python_code = """
 import sys
@@ -1086,8 +1141,7 @@ try:
             <main>
                 <div class="flat-layout-3col">
                     <aside class="col-files">
-                        <div class="list-title" title="__FILENAME__">Files</div>
-                        <div class="list-container">
+                        <div class="list-container" style="padding: 0; display: flex; flex-direction: column;">
                             __OPTIONS__
                         </div>
                     </aside>

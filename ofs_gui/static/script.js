@@ -871,7 +871,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const resp = await fetch('/api/telemetry');
             if (!resp.ok) return;
             const data = await resp.json();
-            
+
             // 1. INDI Status
             const serverEl = document.getElementById('tel-indi-server');
             const syncServerEl = document.getElementById('sync-tel-indi-server');
@@ -885,7 +885,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 syncServerEl.textContent = srv;
                 syncServerEl.className = srvClass;
             }
-            
+
             const statusEl = document.getElementById('tel-indi-status');
             const syncStatusEl = document.getElementById('sync-tel-indi-status');
             const status = data.status || 'UNKNOWN';
@@ -898,7 +898,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 syncStatusEl.textContent = status;
                 syncStatusEl.className = statusClass;
             }
-            
+
             // 2. Time
             const localEl = document.getElementById('tel-time-local');
             const syncLocalEl = document.getElementById('sync-tel-time-local');
@@ -913,7 +913,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (localEl) localEl.textContent = formattedLocal;
                 if (syncLocalEl) syncLocalEl.textContent = formattedLocal;
             }
-            
+
             const utcEl = document.getElementById('tel-time-utc');
             const syncUtcEl = document.getElementById('sync-tel-time-utc');
             if ((utcEl || syncUtcEl) && data.timestamp_utc) {
@@ -925,7 +925,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (utcEl) utcEl.textContent = formattedUtc;
                 if (syncUtcEl) syncUtcEl.textContent = formattedUtc;
             }
-            
+
             // 3. GPS
             const coordsEl = document.getElementById('tel-gps-coords');
             const syncCoordsEl = document.getElementById('sync-tel-gps-coords');
@@ -937,7 +937,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (coordsEl) coordsEl.textContent = formattedCoords;
                 if (syncCoordsEl) syncCoordsEl.textContent = formattedCoords;
             }
-            
+
             const elevEl = document.getElementById('tel-gps-elev');
             const syncElevEl = document.getElementById('sync-tel-gps-elev');
             if (elevEl || syncElevEl) {
@@ -948,7 +948,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (elevEl) elevEl.textContent = formattedElev;
                 if (syncElevEl) syncElevEl.textContent = formattedElev;
             }
-            
+
             // 4. Orientation
             const orientCoordsEl = document.getElementById('tel-orient-coords');
             const syncOrientCoordsEl = document.getElementById('sync-tel-orient-coords');
@@ -962,7 +962,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (orientCoordsEl) orientCoordsEl.textContent = formattedOrient;
                 if (syncOrientCoordsEl) syncOrientCoordsEl.textContent = formattedOrient;
             }
-            
+
             const pierEl = document.getElementById('tel-orient-pier');
             const syncPierEl = document.getElementById('sync-tel-orient-pier');
             const pier = data.side_of_pier || 'UNKNOWN';
@@ -1029,17 +1029,17 @@ document.addEventListener('DOMContentLoaded', () => {
     const syncFlowStopBtn = document.getElementById('sync-flow-stop-btn');
     const syncTerminal = document.getElementById('sync-terminal');
     const clearSyncLogBtn = document.getElementById('clear-sync-log');
-    
+
     const syncStatLabel = document.getElementById('sync-stat-label');
     const syncStatTask = document.getElementById('sync-stat-task');
-    
+
     const syncResStatus = document.getElementById('sync-res-status');
     const syncResConf = document.getElementById('sync-res-conf');
     const syncResStars = document.getElementById('sync-res-stars');
     const syncResTime = document.getElementById('sync-res-time');
     const syncResRaHms = document.getElementById('sync-res-ra-hms');
     const syncResDecDms = document.getElementById('sync-res-dec-dms');
-    
+
     const syncManualForm = document.getElementById('sync-manual-form');
     const syncManualRaInput = document.getElementById('sync-manual-ra');
     const syncManualDecInput = document.getElementById('sync-manual-dec');
@@ -1060,7 +1060,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const mVal = (raHours - h) * 60;
         const m = Math.floor(mVal);
         const s = Math.round((mVal - m) * 60);
-        
+
         let finalH = h;
         let finalM = m;
         let finalS = s;
@@ -1072,7 +1072,7 @@ document.addEventListener('DOMContentLoaded', () => {
             finalM -= 60;
             finalH = (finalH + 1) % 24;
         }
-        
+
         return `${String(finalH).padStart(2, '0')}h${String(finalM).padStart(2, '0')}m${String(finalS).padStart(2, '0')}s`;
     }
 
@@ -1086,7 +1086,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const mVal = (absVal - d) * 60;
         const m = Math.floor(mVal);
         const s = Math.round((mVal - m) * 60);
-        
+
         let finalD = d;
         let finalM = m;
         let finalS = s;
@@ -1098,7 +1098,7 @@ document.addEventListener('DOMContentLoaded', () => {
             finalM -= 60;
             finalD += 1;
         }
-        
+
         return `${sign}${String(finalD).padStart(2, '0')}°${String(finalM).padStart(2, '0')}'${String(finalS).padStart(2, '0')}"`;
     }
 
@@ -1204,12 +1204,12 @@ document.addEventListener('DOMContentLoaded', () => {
                     syncResTime.textContent = `${data.process_time}s`;
                     syncResRaHms.textContent = data.ra_hms;
                     syncResDecDms.textContent = data.dec_dms;
-                    
+
                     syncManualRaInput.value = data.ra_deg.toFixed(6);
                     syncManualDecInput.value = data.dec_deg.toFixed(6);
                     updateManualConvertedRA();
                     updateManualConvertedDEC();
-                    
+
                     syncStatLabel.textContent = 'SOLVED';
                     syncStatLabel.className = 'badge connected';
                     syncStatTask.textContent = 'Solved! Review coordinates and sync to INDI.';
@@ -1221,7 +1221,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     syncResTime.textContent = 'N/A';
                     syncResRaHms.textContent = 'N/A';
                     syncResDecDms.textContent = 'N/A';
-                    
+
                     syncStatLabel.textContent = 'FAILED';
                     syncStatLabel.className = 'badge disconnected';
                     syncStatTask.textContent = `Solve failed: ${data.fail_reason}`;
@@ -1241,7 +1241,7 @@ document.addEventListener('DOMContentLoaded', () => {
         syncStatLabel.className = 'badge exposing';
         syncStatTask.textContent = 'Starting sync flow...';
         syncTerminal.innerHTML = '';
-        
+
         try {
             addSyncTerminalLog('>>> Starting Sync Flow...', 'system');
             const resp = await fetch('/api/sync/flow/start', { method: 'POST', body: formData });
@@ -1281,16 +1281,16 @@ document.addEventListener('DOMContentLoaded', () => {
             alert('RA and DEC values are required.');
             return;
         }
-        
+
         const formData = new FormData();
         formData.append('ra', raVal);
         formData.append('dec', decVal);
-        
+
         syncStatLabel.textContent = 'SYNCING';
         syncStatLabel.className = 'badge waiting';
         syncStatTask.textContent = 'Syncing coordinates to INDI...';
         addSyncTerminalLog(`>>> Syncing to INDI (RA: ${raVal}, Dec: ${decVal})...`, 'system');
-        
+
         try {
             const resp = await fetch('/api/sync/indi', { method: 'POST', body: formData });
             if (resp.ok) {
@@ -1433,7 +1433,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 alert('Please specify a Flat Directory first.');
                 return;
             }
-            const url = `/api/starforge/flat_view?dir=${encodeURIComponent(dir)}&session=${encodeURIComponent(session)}`;
+            let url = `/api/starforge/flat_view?dir=${encodeURIComponent(dir)}&session=${encodeURIComponent(session)}&_t=${new Date().getTime()}`;
+            const outDirEl = document.getElementById('sfg-out-dir');
+            if (outDirEl) {
+                const outDir = outDirEl.value.trim();
+                if (outDir) {
+                    url += `&out_dir=${encodeURIComponent(outDir)}`;
+                }
+            }
             window.open(url, '_blank');
         };
     }
@@ -1460,13 +1467,20 @@ document.addEventListener('DOMContentLoaded', () => {
         listContainer.innerHTML = '<div class="placeholder">Loading...</div>';
         hiddenInput.value = '';
 
+        let type = prefix === 'sfg-flat-sess' ? 'flat' : 'dark';
+
         try {
-            const resp = await fetch(`/api/logs/browse?path=${encodeURIComponent(path)}`);
+            const [resp, fitsResp] = await Promise.all([
+                fetch(`/api/logs/browse?path=${encodeURIComponent(path)}`),
+                fetch(`/api/starforge/stacked_fits?dir=${encodeURIComponent(path)}&type=${type}`)
+            ]);
+
             if (!resp.ok) {
                 listContainer.innerHTML = '<div class="placeholder">No sessions found (log missing)</div>';
                 return;
             }
             const data = await resp.json();
+            const stackedFits = fitsResp.ok ? await fitsResp.json() : [];
             const sessionsMap = new Map();
             const fullRecordsMap = new Map();
             data.forEach(record => {
@@ -1494,6 +1508,15 @@ document.addEventListener('DOMContentLoaded', () => {
             const sortedIds = Array.from(sessionsMap.keys()).sort().reverse();
             sortedIds.forEach(sid => {
                 const obj = sessionsMap.get(sid);
+                const hasColor = stackedFits.some(f => f.includes(`_${sid}`) && f.toLowerCase().includes('color'));
+                const hasMono = stackedFits.some(f => f.includes(`_${sid}`) && f.toLowerCase().includes('mono'));
+                const hasOtherFit = stackedFits.some(f => f.includes(`_${sid}`) && !f.toLowerCase().includes('color') && !f.toLowerCase().includes('mono'));
+
+                let fitBadges = '';
+                if (hasColor) fitBadges += `<span class="stacked-fit-badge" style="font-size: 0.7em; padding: 2px 4px; border-radius: 4px; background: rgba(255, 100, 100, 0.15); color: #ff8888; margin-left: 4px; border: 1px solid rgba(255,136,136,0.4);" title="Color FIT exists">Color</span>`;
+                if (hasMono) fitBadges += `<span class="stacked-fit-badge" style="font-size: 0.7em; padding: 2px 4px; border-radius: 4px; background: rgba(200, 200, 200, 0.15); color: #dddddd; margin-left: 4px; border: 1px solid rgba(221,221,221,0.4);" title="Mono FIT exists">Mono</span>`;
+                if (hasOtherFit && !hasColor && !hasMono) fitBadges += `<span class="stacked-fit-icon" style="font-size: 0.85em; color: var(--accent-color); font-weight: bold; margin-left: 4px;" title="Stacked FIT exists">✅</span>`;
+
                 const item = document.createElement('div');
                 item.className = 'list-item';
 
@@ -1520,8 +1543,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 const label = document.createElement('label');
                 label.className = 'item-label';
+                label.style.display = 'flex';
+                label.style.justifyContent = 'space-between';
+                label.style.width = '100%';
                 label.htmlFor = cb.id;
-                label.innerHTML = `<span class="session-name">${sid}</span><span class="session-obj">${obj}</span>`;
+                label.innerHTML = `<span class="session-name">${sid}</span><span>${fitBadges}</span>`;
 
                 item.appendChild(cb);
                 item.appendChild(label);

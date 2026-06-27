@@ -475,7 +475,7 @@ button {
 /* LOGDATA 3-Column */
 .logdata-layout-3col {
     display: grid;
-    grid-template-columns: 25% 25% 1fr;
+    grid-template-columns: 30% 30% 1fr;
     gap: 1rem;
     height: calc(100vh - 120px);
 }
