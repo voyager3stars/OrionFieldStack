@@ -14,7 +14,7 @@
     <div class="container">
         <header>
             <div class="header-main">
-                <h1>OrionFieldStack <span class="v-tag">v1.4.2</span></h1>
+                <h1>OrionFieldStack <span class="v-tag">v1.4.3</span></h1>
                 <nav class="tabs">
                     <button class="tab-btn active" data-tab="shutter">SHUTTER</button>
                     <button class="tab-btn" data-tab="logdata">LOGDATA</button>
@@ -588,9 +588,10 @@
                                         </div>
                                     </div>
                                     <div style="display: flex; flex-direction: column;">
-                                        <label
-                                            style="font-size: 0.7rem; color: var(--text-dim); margin-bottom: 4px;">Flat
-                                            Session (optional)</label>
+                                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                                            <label style="font-size: 0.7rem; color: var(--text-dim); margin-bottom: 0;">Flat Session (optional)</label>
+                                            <button type="button" id="sfg-view-flat-btn" class="btn-small" style="padding: 2px 8px; font-size: 0.65rem;">View</button>
+                                        </div>
                                         <input type="hidden" id="sfg-flat-session" name="flat_session">
                                         <div
                                             style="display: flex; flex-direction: column; border: 1px solid var(--glass-border); border-radius: 8px; background: rgba(0,0,0,0.15); overflow: hidden; height: 140px;">

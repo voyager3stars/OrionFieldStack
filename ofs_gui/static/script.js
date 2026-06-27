@@ -1362,6 +1362,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const sfgFlatDir = document.getElementById('sfg-flat-dir');
     const sfgFlatSession = document.getElementById('sfg-flat-session');
     const sfgFlatSessionList = document.getElementById('sfg-flat-session-list');
+    const sfgViewFlatBtn = document.getElementById('sfg-view-flat-btn');
     const sfgUseDark = document.getElementById('sfg-use-dark');
     const sfgDarkFields = document.getElementById('sfg-dark-fields');
     const sfgDarkDir = document.getElementById('sfg-dark-dir');
@@ -1423,6 +1424,19 @@ document.addEventListener('DOMContentLoaded', () => {
     sfgUseDark.onchange = toggleDarkFields;
     toggleFlatFields();
     toggleDarkFields();
+
+    if (sfgViewFlatBtn) {
+        sfgViewFlatBtn.onclick = () => {
+            const dir = sfgFlatDir.value.trim();
+            const session = sfgFlatSession.value.trim();
+            if (!dir) {
+                alert('Please specify a Flat Directory first.');
+                return;
+            }
+            const url = `/api/starforge/flat_view?dir=${encodeURIComponent(dir)}&session=${encodeURIComponent(session)}`;
+            window.open(url, '_blank');
+        };
+    }
 
     // Toggle sfg advanced panel
     const toggleSfgAdvancedBtn = document.getElementById('toggle-sfg-advanced');
