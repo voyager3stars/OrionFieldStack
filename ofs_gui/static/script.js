@@ -1363,6 +1363,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const sfgFlatSession = document.getElementById('sfg-flat-session');
     const sfgFlatSessionList = document.getElementById('sfg-flat-session-list');
     const sfgViewFlatBtn = document.getElementById('sfg-view-flat-btn');
+    const sfgViewDarkBtn = document.getElementById('sfg-view-dark-btn');
     const sfgUseDark = document.getElementById('sfg-use-dark');
     const sfgDarkFields = document.getElementById('sfg-dark-fields');
     const sfgDarkDir = document.getElementById('sfg-dark-dir');
@@ -1424,6 +1425,26 @@ document.addEventListener('DOMContentLoaded', () => {
     sfgUseDark.onchange = toggleDarkFields;
     toggleFlatFields();
     toggleDarkFields();
+
+    if (sfgViewDarkBtn) {
+        sfgViewDarkBtn.onclick = () => {
+            const dir = sfgDarkDir.value.trim();
+            const session = sfgDarkSession.value.trim();
+            if (!dir) {
+                alert('Please specify a Dark Directory first.');
+                return;
+            }
+            let url = `/api/starforge/dark_view?dir=${encodeURIComponent(dir)}&session=${encodeURIComponent(session)}&_t=${new Date().getTime()}`;
+            const outDirEl = document.getElementById('sfg-out-dir');
+            if (outDirEl) {
+                const outDir = outDirEl.value.trim();
+                if (outDir) {
+                    url += `&out_dir=${encodeURIComponent(outDir)}`;
+                }
+            }
+            window.open(url, '_blank');
+        };
+    }
 
     if (sfgViewFlatBtn) {
         sfgViewFlatBtn.onclick = () => {
