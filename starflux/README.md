@@ -1,4 +1,4 @@
-# StarFlux v1.3.2
+# StarFlux v1.3.3
 
 **High-Precision Image Quality Analyzer & Statistics Integrator**
 
@@ -81,6 +81,8 @@ python3 starflux.py ~/Pictures/M42_Project/ --plot --no-log
 | `--snr <値>` | `5.0` | 星検出の閾値。画像のクリップ済み標準偏差 × SNR を DAOStarFinder の閾値に使用します。 |
 | `--box-size <N>` | `15` | 各星の品質解析に使うカットアウト（切り出し）サイズ（ピクセル）。 |
 | `--session <ID>` | なし | **フォルダ指定時のみ有効。** `shutter_log.json` の `session_id` が一致するファイルだけを処理対象にします。 |
+| `--save-bg-image` | `OFF` | 画像の背景モデル（2D背景画像）を抽出し、FITS形式で保存します。 |
+| `-outpath / --outpath` | なし | `--save-bg-image` 時にFITSファイルを保存するディレクトリパスを指定します（指定がない場合は元画像と同じディレクトリ）。 |
 
 ### `--session` の挙動
 
@@ -107,11 +109,11 @@ python3 starflux.py ~/Pictures/M42_Project/ --plot --no-log
 
 **コンソール出力の例:**
 ```text
-StarFlux v1.3.2>> Scanning directory: ~/Pictures/M42_Project/
-StarFlux v1.3.2>> Found 12 image(s) to analyze.
-  [Skip] IMG_0001.dng already processed by v1.3.2
+StarFlux v1.3.3>> Scanning directory: ~/Pictures/M42_Project/
+StarFlux v1.3.3>> Found 12 image(s) to analyze.
+  [Skip] IMG_0001.dng already processed by v1.3.3
   [Processing] IMG_0002.dng...
-StarFlux v1.3.2>> Finished. 11/12 files processed in 45.3s.
+StarFlux v1.3.3>> Finished. 11/12 files processed in 45.3s.
 ```
 
 解析に失敗した場合（星未検出、読み込みエラー等）も、`--no-log` を指定していなければログに `error` ステータスを記録します。
@@ -126,15 +128,19 @@ StarFluxは、解析対象と同じディレクトリにある `shutter_log.json
 
 ### 1. JSON 形式 (`shutter_log.json`)
 
-各レコードの `analysis` ブロック内に `SF` オブジェクトが生成または更新されます（OrionFieldStack JSON Spec v1.6.2 準拠）。
+各レコードの `analysis` ブロック内に `SF` オブジェクトが生成または更新されます（OrionFieldStack JSON Spec v1.6.3 準拠）。
 
 **成功時:**
 ```json
 "analysis": {
     "SF": {
-        "sf_version": "1.3.2",
+        "sf_version": "1.3.3",
         "sf_status": "success",
-        "sf_timestamp": "2026-06-14T22:30:15",
+        "sf_timestamp": "2026-06-28T23:12:37",
+        "bg_image": {
+            "path": "/home/mtorig/Pictures",
+            "name": "IMG_1234_bg_image.fit"
+        },
         "quality": {
             "sf_stars": 300,
             "sf_fwhm_mean": 2.54,
@@ -142,7 +148,9 @@ StarFluxは、解析対象と同じディレクトリにある `shutter_log.json
             "sf_fwhm_std": 0.32,
             "sf_ell_mean": 0.12,
             "sf_ell_med": 0.11,
-            "sf_ell_std": 0.04
+            "sf_ell_std": 0.04,
+            "sf_bg_median": 7883.372,
+            "sf_bg_mad": 710.304
         }
     }
 }
@@ -152,9 +160,9 @@ StarFluxは、解析対象と同じディレクトリにある `shutter_log.json
 ```json
 "analysis": {
     "SF": {
-        "sf_version": "1.3.2",
+        "sf_version": "1.3.3",
         "sf_status": "error",
-        "sf_timestamp": "2026-06-14T22:30:15",
+        "sf_timestamp": "2026-06-28T23:12:37",
         "sf_error": "No stars detected"
     }
 }
@@ -164,13 +172,15 @@ StarFluxは、解析対象と同じディレクトリにある `shutter_log.json
 
 ### 2. CSV 形式 (`shutter_log.csv`)
 
-SSE 関連列の後に、以下の StarFlux 列が追記されます（v1.6.2 マスターヘッダー準拠）。
+SSE 関連列の後に、以下の StarFlux 列が**固定で BM列 (65列目)** から追記されます（v1.6.3 マスターヘッダー準拠）。
 
 | ヘッダー名 | 内容 |
 | :--- | :--- |
 | `SF_version` | StarFlux バージョン |
 | `SF_status` | 解析ステータス（`success` / `error`） |
 | `SF_timestamp` | 解析実行日時 |
+| `bg_image_path` | 背景画像（FITS）の保存先パス |
+| `bg_image_name` | 背景画像（FITS）のファイル名 |
 | `SF_stars` | 解析された星の数 |
 | `SF_fwhm_med` | FWHM 中央値 |
 | `SF_fwhm_mean` | FWHM 平均値 |
@@ -178,10 +188,19 @@ SSE 関連列の後に、以下の StarFlux 列が追記されます（v1.6.2 �
 | `SF_ell_med` | 楕円率 中央値 |
 | `SF_ell_mean` | 楕円率 平均値 |
 | `SF_ell_std` | 楕円率 標準偏差 (σ) |
+| `SF_bg_median` | 背景の明るさ 中央値 (ADU) |
+| `SF_bg_mad` | 背景ノイズ MAD値 |
 
-旧フォーマットの CSV（レガシー列名）を読み込んだ場合も、書き込み時に v1.6.2 ヘッダーへ自動変換されます。
+旧フォーマットの CSV（レガシー列名）を読み込んだ場合も、書き込み時に v1.6.3 ヘッダーへ自動変換されます。
 
 ---
 
 ## ⚖️ License
 © 2026 OrionFieldStack Project / MIT License
+
+---
+
+## 📝 更新履歴
+* **v1.3.3**: 背景の明るさ(`bg_median`)および背景ノイズ(`bg_mad`)の算出に対応。2D背景のFITS画像保存機能(`--save-bg-image`)と、保存先指定オプション(`-outpath`)を追加。JSONおよびCSVの出力フォーマットをアップデート。
+* **v1.3.2**: FWHMおよび楕円率の処理の最適化とバグフィックス。
+* **v1.1.0**: フォルダ一括処理、`shutter_log.json` 自動統合機能の実装。

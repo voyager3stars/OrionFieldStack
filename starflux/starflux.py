@@ -20,8 +20,9 @@ import rawpy
 from astropy.io import fits
 from astropy.stats import sigma_clipped_stats
 from photutils.detection import DAOStarFinder
+from photutils.background import Background2D, MedianBackground
 
-__version__ = "1.3.2"
+__version__ = "1.3.3"
 
 def load_image(file_path):
     """
@@ -147,16 +148,21 @@ def update_shutter_log(img_path, report):
                         sf_data = {
                             "sf_version": __version__,
                             "sf_status": "success",
-                            "sf_timestamp": report["timestamp"],
-                            "quality": {
-                                "sf_stars": report["stars_analyzed"],
-                                "sf_fwhm_mean": round(report["fwhm"]["mean"], 3),
-                                "sf_fwhm_med": round(report["fwhm"]["median"], 3),
-                                "sf_fwhm_std": round(report["fwhm"]["sigma"], 3),
-                                "sf_ell_mean": round(report["ellipticity"]["mean"], 3),
-                                "sf_ell_med": round(report["ellipticity"]["median"], 3),
-                                "sf_ell_std": round(report["ellipticity"]["sigma"], 3)
-                            }
+                            "sf_timestamp": report["timestamp"]
+                        }
+                        if "bg_image" in report:
+                            sf_data["bg_image"] = report["bg_image"]
+                            
+                        sf_data["quality"] = {
+                            "sf_stars": report["stars_analyzed"],
+                            "sf_fwhm_mean": round(report["fwhm"]["mean"], 3),
+                            "sf_fwhm_med": round(report["fwhm"]["median"], 3),
+                            "sf_fwhm_std": round(report["fwhm"]["sigma"], 3),
+                            "sf_ell_mean": round(report["ellipticity"]["mean"], 3),
+                            "sf_ell_med": round(report["ellipticity"]["median"], 3),
+                            "sf_ell_std": round(report["ellipticity"]["sigma"], 3),
+                            "sf_bg_median": round(report.get("bg_median", 0.0), 3),
+                            "sf_bg_mad": round(report.get("bg_mad", 0.0), 3)
                         }
                     else:
                         sf_data = {
@@ -214,8 +220,8 @@ def update_csv_log(img_path, report):
             "Solve_Path", "Solve_Confidence", "Solve_Timestamp", "Solve_RA", 
             "Solve_DEC", "Solve_Orientation", "Solve_RA_hms", "Solve_DEC_dms", 
             "Matched_Stars", "Solve_Time_sec", "SF_version", "SF_status", 
-            "SF_timestamp", "SF_stars", "SF_fwhm_med", "SF_fwhm_mean", 
-            "SF_fwhm_std", "SF_ell_med", "SF_ell_mean", "SF_ell_std"
+            "SF_timestamp", "bg_image_path", "bg_image_name", "SF_stars", "SF_fwhm_med", "SF_fwhm_mean", 
+            "SF_fwhm_std", "SF_ell_med", "SF_ell_mean", "SF_ell_std", "SF_bg_median", "SF_bg_mad"
         ]
         
         legacy_map = {
@@ -275,6 +281,8 @@ def update_csv_log(img_path, report):
                 if csv_filename and (csv_filename == img_name or csv_filename in img_name):
                     if report.get("success"):
                         new_row["SF_stars"]     = str(report["stars_analyzed"])
+                        new_row["SF_bg_median"] = f"{report.get('bg_median', 0):.3f}"
+                        new_row["SF_bg_mad"]    = f"{report.get('bg_mad', 0):.3f}"
                         new_row["SF_fwhm_med"]  = f"{report['fwhm']['median']:.3f}"
                         new_row["SF_fwhm_mean"] = f"{report['fwhm']['mean']:.3f}"
                         new_row["SF_fwhm_std"]  = f"{report['fwhm']['sigma']:.3f}"
@@ -282,8 +290,13 @@ def update_csv_log(img_path, report):
                         new_row["SF_ell_mean"]  = f"{report['ellipticity']['mean']:.3f}"
                         new_row["SF_ell_std"]   = f"{report['ellipticity']['sigma']:.3f}"
                         new_row["SF_status"]    = "success"
+                        if report.get("bg_image"):
+                            new_row["bg_image_path"] = report["bg_image"]["path"]
+                            new_row["bg_image_name"] = report["bg_image"]["name"]
                     else:
                         new_row["SF_stars"]     = ""
+                        new_row["SF_bg_median"] = ""
+                        new_row["SF_bg_mad"]    = ""
                         new_row["SF_fwhm_med"]  = ""
                         new_row["SF_fwhm_mean"] = ""
                         new_row["SF_fwhm_std"]  = ""
@@ -291,6 +304,8 @@ def update_csv_log(img_path, report):
                         new_row["SF_ell_mean"]  = ""
                         new_row["SF_ell_std"]   = ""
                         new_row["SF_status"]    = "error"
+                        new_row["bg_image_path"] = ""
+                        new_row["bg_image_name"] = ""
                     new_row["SF_timestamp"] = report["timestamp"]
                     new_row["SF_version"]   = __version__
                     updated = True
@@ -352,6 +367,38 @@ def process_file(img_path, args):
     try:
         data = load_image(img_path)
         mean_val, median_val, std_val = sigma_clipped_stats(data, sigma=3.0)
+        
+        try:
+            bkg = Background2D(data, (128, 128), filter_size=(3, 3), bkg_estimator=MedianBackground())
+            bkg_image = bkg.background
+            bg_median = float(bkg.background_median)
+        except Exception as e:
+            print(f"  [Warning] Background2D failed, using flat background: {e}")
+            bkg_image = np.full_like(data, median_val)
+            bg_median = float(median_val)
+            
+        bg_mad = float(np.median(np.abs(data - bg_median)))
+        
+        bg_image_info = None
+        if getattr(args, 'save_bg_image', False):
+            base_name = os.path.splitext(img_name)[0]
+            bg_filename = f"{base_name}_bg_image.fit"
+            
+            if getattr(args, 'outpath', None):
+                out_dir = os.path.abspath(args.outpath)
+            else:
+                out_dir = os.path.dirname(os.path.abspath(img_path))
+                
+            os.makedirs(out_dir, exist_ok=True)
+            bg_path = os.path.join(out_dir, bg_filename)
+            fits.writeto(bg_path, bkg_image, overwrite=True)
+            print(f"  [Info] Saved background image to {bg_path}")
+            
+            bg_image_info = {
+                "path": out_dir,
+                "name": bg_filename
+            }
+
         daofind = DAOStarFinder(fwhm=3.0, threshold=args.snr * std_val)
         stars_found = daofind(data - median_val)
         
@@ -380,6 +427,8 @@ def process_file(img_path, args):
             "success": True,
             "input_file": img_name,
             "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S"),
+            "bg_median": bg_median,
+            "bg_mad": bg_mad,
             "stars_analyzed": len(quality_list),
             "fwhm": {
                 "mean": float(np.mean(fwhms)), "median": float(np.median(fwhms)), "sigma": float(np.std(fwhms))
@@ -389,6 +438,9 @@ def process_file(img_path, args):
             },
             "processing_time_sec": round(time.time() - start_time, 2)
         }
+        
+        if bg_image_info:
+            report["bg_image"] = bg_image_info
         
         # ログの更新
         if not args.no_log:
@@ -426,6 +478,8 @@ def main():
     parser.add_argument("--box-size", type=int, default=15, help="Cutout size")
     parser.add_argument("--snr", type=float, default=5.0, help="SNR threshold")
     parser.add_argument("--session", help="Filter by Session ID")
+    parser.add_argument("--save-bg-image", action="store_true", help="Save background-only image as FITS")
+    parser.add_argument("-outpath", "--outpath", help="Directory path to save the background image")
     args = parser.parse_args()
 
     overall_start = time.time()

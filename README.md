@@ -1,4 +1,4 @@
-# OrionFieldStack
+# OrionFieldStack v1.4.4
 
 # 1. プロジェクト概要📝
 OrionFieldStack は、Raspberry Pi 5を使用した、フィールドにおける天体撮影を支援する統合ツールキットです。自動撮影・データ取得のみならず、画像解析（プレートゾルビング）で、撮影した天体の位置を自動で割り出し、撮影データのスタッキングが可能です。
@@ -138,6 +138,13 @@ Raspberry Pi 5 (GPIO Header)               External Components
 
 ## 4.2 外観💻
 <img src="images/IMGP8585s.JPG" width="40%">
+
+## 5. 更新履歴 (Changelog) 🔄
+### v1.4.4
+- **ofs_gui (Starforge機能連携の強化)**
+  - **Flat View画面の拡張**: Flat View画面の左側ペインに「STACKED FILE」セクションを追加し、生成済みのマスターフラットファイル（FITS等）を直接選択・プレビューできるようになりました。
+  - **出力先フォルダのフォールバック**: StarforgeタブでOutput Directoryが指定されていない場合でも、自動的に元の画像ディレクトリからスタック済みファイルを検索するようにバックエンドロジックを改善しました。
+  - **セッション一覧の視認性向上**: Starforgeタブのセッションリストにおいて、スタック済みFITファイルが存在するかを示すインジケーターを拡張しました。ファイル名に基づいて「Color」や「Mono」などのバッジを動的に表示し、一目でデータ種別を判別できるようになりました。
 
 ## ⚖️ License
 © 2026 OrionFieldStack Project / MIT License

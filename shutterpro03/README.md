@@ -9,7 +9,7 @@ ShutterPro03は、Raspberry Piを用いた天体撮影における物理シャ�
 ## 🛰 概要と特徴
 
 本ツールは、USB経由の制御やデータ転送に対応していない旧式やエントリークラスのカメラでも、高度な自動撮影とワイヤレスワークフローを実現します。
-単なるシャッター操作に留まらず、撮影の瞬間にINDIサーバーから天体座標（RA/Dec）や気象データを取得し、画像のEXIFメタデータと同期。**OrionFieldStack JSON Log Specification (v1.6.2)** に基づいた高精度な標準化ログを生成します。
+単なるシャッター操作に留まらず、撮影の瞬間にINDIサーバーから天体座標（RA/Dec）や気象データを取得し、画像のEXIFメタデータと同期。**OrionFieldStack JSON Log Specification (v1.6.3)** に基づいた高精度な標準化ログを生成します。
 
 * **柔軟なシャッター制御**: GPIOを介したバルブ撮影およびカメラトリガー制御に対応。
 * **物理的な絶縁と安全性**: フォトカプラ（PC817等）を介したシャッター回路により、カメラとRaspberry Piを電気的に分離し保護。
@@ -159,7 +159,7 @@ graph TD
     subgraph "Raspberry Pi (OrionFieldStack Core)"
         SP03[<b>ShutterPro03</b><br/>Python Script]
         CONF[(config.json)]
-        LOG[[JSON Log v1.6.2]]
+        LOG[[JSON Log v1.6.3]]
     end
 
     subgraph "Physical Connection"
@@ -204,6 +204,10 @@ graph TD
 ---
 
 ## 📝 更新履歴
+
+### v15.0.6 (2026-06-28)
+* **OrionFieldStack JSON Spec v1.6.3 準拠**:
+  JSON/CSVログ仕様のv1.6.3への引き上げに伴い、内部バージョン表記を更新。
 
 ### v15.0.5 (2026-06-20)
 * **DNG画像サイズ（Width/Height）検出の修正 (sp03_logger.py)**:

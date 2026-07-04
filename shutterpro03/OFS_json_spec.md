@@ -1,4 +1,4 @@
-# OrionFieldStack JSON Log Specification v1.6.2
+# OrionFieldStack JSON Log Specification v1.6.3
 
 ## 1. Overview
 This document defines the integrated log schema for the **OrionFieldStack** project.
@@ -104,6 +104,9 @@ This document defines the integrated log schema for the **OrionFieldStack** proj
 | &emsp;└`sf_version` | String | StarFlux version. | **SF_version** |
 | &emsp;└`sf_status` | String | "success" or "failed". | **SF_status** |
 | &emsp;└`sf_timestamp` | String | Quality analysis execution timestamp. | **SF_timestamp** |
+| &emsp;└`bg_image` | **Object** | **Container for saved background image** | - |
+| &emsp;&emsp;└`path` | String | Directory path to the saved background image. | **bg_image_path** |
+| &emsp;&emsp;└`name` | String | Filename of the saved background image. | **bg_image_name** |
 | &emsp;└`quality` | **Object** | **Container for quality** | - |
 | &emsp;&emsp;└`sf_stars` | Int | Number of stars used for quality analysis. | **SF_stars** |
 | &emsp;&emsp;└`sf_fwhm_med` | Float | Median FWHM (Full Width at Half Maximum). | **SF_fwhm_med** |
@@ -112,6 +115,8 @@ This document defines the integrated log schema for the **OrionFieldStack** proj
 | &emsp;&emsp;└`sf_ell_med` | Float | Median Ellipticity (1 - b/a). | **SF_ell_med** |
 | &emsp;&emsp;└`sf_ell_mean` | Float | Mean Ellipticity value. | **SF_ell_mean** |
 | &emsp;&emsp;└`sf_ell_std` | Float | Standard deviation of Ellipticity. | **SF_ell_std** |
+| &emsp;&emsp;└`sf_bg_median` | Float | Median of the background ADU. | **SF_bg_median** |
+| &emsp;&emsp;└`sf_bg_mad` | Float | Median Absolute Deviation of the background noise. | **SF_bg_mad** |
 
 
 EOF

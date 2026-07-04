@@ -2,7 +2,7 @@
 
 **OrionFieldStack ログデータ整合性管理・双方向同期ツール**
 
-LogHarmonizerは、天体撮影ログのマスターデータである `shutter_log.json` と、編集・閲覧用の `shutter_log.csv` の間でデータの整合性を保ち、双方向に同期するためのツールです。OrionFieldStack JSON Spec v1.6.2 に完全準拠しており、ShutterPro03、SkySolverEngine (SSE)、StarFlux によって生成されたデータの管理を容易にします。
+LogHarmonizerは、天体撮影ログのマスターデータである `shutter_log.json` と、編集・閲覧用の `shutter_log.csv` の間でデータの整合性を保ち、双方向に同期するためのツールです。OrionFieldStack JSON Spec v1.6.3 に完全準拠しており、ShutterPro03、SkySolverEngine (SSE)、StarFlux によって生成されたデータの管理を容易にします。
 
 ---
 
@@ -17,12 +17,12 @@ LogHarmonizerは、天体撮影ログのマスターデータである `shutter_
 
 ## 🛠 Features
 
-1. **OrionFieldStack v1.6.2 準拠**: 最新の階層構造化されたJSONスキーマに対応しています。
+1. **OrionFieldStack v1.6.3 準拠**: 最新の階層構造化されたJSONスキーマに対応しています。
 2. **安全なバックアップ**: 同期処理を実行する直前に、既存のログファイルを `backups/` フォルダへ自動退避します。
 3. **対話型コンフリクト解消**: 新規レコードの追加や既存レコードの削除を、一つずつ確認しながら実行できます。
 4. **高精度データ保持**: 座標や露出時間など、項目ごとに最適な小数点精度（Precision）を維持して同期します。
 5. **Latest Shot 連携**: 処理後の最新レコードを `latest_shot.json` として出力し、他のビューアー等との連携を容易にします。
-6. **レガシーフォーマット自動変換**: 旧バージョンのCSVを読み込んだ際も、自動的に新フォーマット（v1.6.2）の列名に変換し、データ欠落を防ぎます。
+6. **レガシーフォーマット自動変換**: 旧バージョンのCSVを読み込んだ際も、自動的に新フォーマット（v1.6.3）の列名に変換し、データ欠落を防ぎます。
 
 ---
 
@@ -110,6 +110,14 @@ LogHarmonizerは、同期時にデータの精度が劣化しないよう、以�
 ## 🛡 Backup System
 
 同期処理が開始されると、`backups/` 以下に `YYMMDDHHMM_mode` 形式のディレクトリが作成され、処理前の JSON/CSV 両方がコピーされます。不適切な同期を行ってしまった場合でも、ここから元の状態に復元することが可能です。
+
+---
+
+## 📝 更新履歴
+
+* **v1.6.4** (2026-06-28)
+  - **OrionFieldStack JSON Spec v1.6.3 準拠**:
+    StarFluxの背景解析データ追加に伴い、マッピング（`MAPPING`）および精度設定（`PRECISION_MAP`）を拡張。CSVとJSONの双方向同期時のデータ欠落を防止。
 
 ---
 

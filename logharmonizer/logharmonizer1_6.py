@@ -3,7 +3,7 @@
 LogHarmonizer1_6 v1.6.4
 Bidirectional synchronization between shutter_log.csv and shutter_log.json.
 Modes: [c2j] CSV to JSON (Default), [j2c] JSON to CSV.
-Precision synchronization with ShutterPro03, SSE, and StarFlux (v1.6.2 Spec).
+Precision synchronization with ShutterPro03, SSE, and StarFlux (v1.6.3 Spec).
 """
 
 import json
@@ -15,7 +15,7 @@ import sys
 from datetime import datetime
 
 class LogHarmonizer:
-    # Full mapping definition for v1.6.2 Spec Compliance
+    # Full mapping definition for v1.6.3 Spec Compliance
     # csv_header: (json_hierarchical_path, display_name)
     MAPPING = {
         "JSON_ver": "version",
@@ -85,13 +85,17 @@ class LogHarmonizer:
         "SF_version": ("analysis", "SF", "sf_version"),
         "SF_status": ("analysis", "SF", "sf_status"),
         "SF_timestamp": ("analysis", "SF", "sf_timestamp"),
+        "bg_image_path": ("analysis", "SF", "bg_image", "path"),
+        "bg_image_name": ("analysis", "SF", "bg_image", "name"),
         "SF_stars": ("analysis", "SF", "quality", "sf_stars"),
         "SF_fwhm_med": ("analysis", "SF", "quality", "sf_fwhm_med"),
         "SF_fwhm_mean": ("analysis", "SF", "quality", "sf_fwhm_mean"),
         "SF_fwhm_std": ("analysis", "SF", "quality", "sf_fwhm_std"),
         "SF_ell_med": ("analysis", "SF", "quality", "sf_ell_med"),
         "SF_ell_mean": ("analysis", "SF", "quality", "sf_ell_mean"),
-        "SF_ell_std": ("analysis", "SF", "quality", "sf_ell_std")
+        "SF_ell_std": ("analysis", "SF", "quality", "sf_ell_std"),
+        "SF_bg_median": ("analysis", "SF", "quality", "sf_bg_median"),
+        "SF_bg_mad": ("analysis", "SF", "quality", "sf_bg_mad")
     }
 
     # Target precision for CSV output (Consistent with ShutterPro03, SSE, and StarFlux)
@@ -107,6 +111,7 @@ class LogHarmonizer:
         "UnixTime": 3, "Sf_Exp_t": 3, "Exposure_Exif": 3, 
         "SF_fwhm_med": 3, "SF_fwhm_mean": 3, "SF_fwhm_std": 3, 
         "SF_ell_med": 3, "SF_ell_mean": 3, "SF_ell_std": 3,
+        "SF_bg_median": 3, "SF_bg_mad": 3,
         # 2 digits: Performance and Reliability
         "Solve_Confidence": 2, "Solve_Orientation": 2, "FileSize": 2, "Pixel_Scale": 2,
         # 1 digit: Environment and Equipment
@@ -135,7 +140,7 @@ class LogHarmonizer:
         self.master_json_path = self.resolve_path(self.config["SYSTEM"]["MASTER_JSON"])
         self.edit_csv_path = self.resolve_path(self.config["SYSTEM"]["EDIT_CSV"])
         self.backup_dir = self.resolve_path(self.config["SYSTEM"]["BACKUP_DIR"])
-        self.version = "1.6.2" # Enforce 1.6.2
+        self.version = "1.6.3" # Enforce 1.6.3
         self.interactive = interactive
 
     def resolve_path(self, path):

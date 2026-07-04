@@ -10,7 +10,7 @@ from sf_loader import load_image
 from sf_align import register_images
 from sf_stack import stack_images, save_stacked_fits
 
-__version__ = "1.4.0"
+__version__ = "1.4.1"
 
 # ANSI Colors
 C_YELLOW_GREEN = "\033[38;5;154m"
@@ -168,7 +168,7 @@ def apply_dark(img_data, dark_data):
 def get_best_frame(valid_files, metadata_map, criteria='sf_ell_med'):
     """
     Scans the metadata_map to find the entry with the best quality metrics
-    among the provided valid_files. Fully v1.6.2 compliant.
+    among the provided valid_files. Fully v1.6.3 compliant.
     """
     best_entry = None
     min_val = float('inf')
@@ -178,7 +178,7 @@ def get_best_frame(valid_files, metadata_map, criteria='sf_ell_med'):
         if not entry:
             continue
             
-        # Try finding quality based on v1.6.2 -> v1.6.1 -> legacy
+        # Try finding quality based on v1.6.3/v1.6.2 -> v1.6.1 -> legacy
         # v1.6.2+: top-level 'analysis' -> 'SF' -> 'quality'
         q = get_nested_val(entry, ["analysis", "SF", "quality"])
         if q is None:
@@ -265,7 +265,7 @@ def collect_images_and_metadata(inputs, session_filters=None, obj_filters=None):
 
 def filter_by_quality(valid_files, metadata_map, criteria='sf_ell_med', threshold=0.2):
     """
-    Returns only files that meet the quality threshold. Fully v1.6.2 compliant.
+    Returns only files that meet the quality threshold. Fully v1.6.3 compliant.
     """
     passed = []
     for f_path in valid_files:
@@ -315,7 +315,7 @@ def get_report_data(args, initial_files, valid_files, metadata_map, dark_files_u
     sub_exposure = 0
     for f in valid_files:
         e = metadata_map.get(f, {})
-        # Look for exposure in v1.6.2 and legacy paths
+        # Look for exposure in v1.6.2/v1.6.3 and legacy paths
         exp = get_nested_val(e, ["record", "meta", "exposure_actual_sec"], 
                              get_nested_val(e, ["record", "exif", "shutter_sec"], 0))
         total_exposure += exp

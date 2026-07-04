@@ -10,8 +10,8 @@
 #   - ポスト処理中の latest_shot.json 汚染を防止。
 # =================================================================
 
-__version__ = "2.2.6"
-__json_spec__ = "1.6.2"
+__version__ = "2.2.7"
+__json_spec__ = "1.6.3"
 
 import os
 import sys
@@ -220,7 +220,7 @@ class SkySolverEngine:
         target_dict["analysis"]["SSE"] = sse_data
 
     def _update_csv_file(self, filepath, target_filename, res):
-        """Streaming update for CSV with forced v1.6.2 layout."""
+        """Streaming update for CSV with forced v1.6.3 layout."""
         temp_fd, temp_path = tempfile.mkstemp(dir=os.path.dirname(filepath), prefix="sse_tmp_", suffix=".csv")
         try:
             seen_comments = set()
@@ -238,8 +238,8 @@ class SkySolverEngine:
                 "Solve_Path", "Solve_Confidence", "Solve_Timestamp", "Solve_RA", 
                 "Solve_DEC", "Solve_Orientation", "Solve_RA_hms", "Solve_DEC_dms", 
                 "Matched_Stars", "Solve_Time_sec", "SF_version", "SF_status", 
-                "SF_timestamp", "SF_stars", "SF_fwhm_med", "SF_fwhm_mean", 
-                "SF_fwhm_std", "SF_ell_med", "SF_ell_mean", "SF_ell_std"
+                "SF_timestamp", "bg_image_path", "bg_image_name", "SF_stars", "SF_fwhm_med", "SF_fwhm_mean", 
+                "SF_fwhm_std", "SF_ell_med", "SF_ell_mean", "SF_ell_std", "SF_bg_median", "SF_bg_mad"
             ]
             
             # Legacy column mapping for older CSVs

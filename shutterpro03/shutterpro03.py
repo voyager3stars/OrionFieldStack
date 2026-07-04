@@ -12,8 +12,8 @@
 #               downloading via FlashAir.
 # ==============================================================================
 
-__version__ = "15.0.5"
-__json_spec__ = "1.6.2"
+__version__ = "15.0.6"
+__json_spec__ = "1.6.3"
 
 import os
 import sys

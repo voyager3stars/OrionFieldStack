@@ -30,7 +30,7 @@ except ImportError:
     print("  Install with: pip install exifread")
     sys.exit(1)
 
-SPEC_VERSION = "1.6.2"
+SPEC_VERSION = "1.6.3"
 TOOL_VERSION = "1.6.1"
 
 # ---------------------------------------------------------------------------

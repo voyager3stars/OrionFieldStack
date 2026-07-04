@@ -7,7 +7,7 @@ import argparse
 import sys
 from datetime import datetime
 
-__version__ = "1.6.0"
+__version__ = "1.6.1"
 
 class ImageFileHarmonizer:
     EXTENSIONS = ('.dng', '.raw', '.fits', '.fit', '.fts')

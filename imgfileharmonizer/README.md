@@ -71,3 +71,15 @@ graph TD
     D -.-> P
     P -.->|退避対象から除外| Orphan
 ```
+
+---
+
+## 📝 更新履歴
+
+* **v1.6.1** (2026-06-28)
+  - **OrionFieldStack JSON Spec v1.6.3 準拠**: CSVログパース時に列をハードコードせず、ファイルの行をそのまま透過的に読み書きする仕様であることを再確認。StarFlux 等による動的な列追加の影響を受けず、データ欠落が発生しない完全な互換性を維持。
+
+---
+
+## ⚖️ License
+© 2026 OrionFieldStack Project / MIT License

@@ -3,12 +3,12 @@
 # Project:      OrionFieldStack
 # Tool:         SkySync v2.1.0 (Core Orchestrator)
 # Description:  
-#   v2.1.0: JSON Spec v1.6.2 準拠のルート並列 analysis.SSE に対応。
+#   v2.1.1: JSON Spec v1.6.3 準拠のルート並列 analysis.SSE に対応。
 #           latest_shot.json のリスト形式・オブジェクト形式双方に対応。
 # =================================================================
 
-__version__ = "2.1.0"
-__json_spec__ = "1.6.2"
+__version__ = "2.1.1"
+__json_spec__ = "1.6.3"
 
 import subprocess
 import argparse
@@ -26,7 +26,7 @@ class SkySync:
         self.sse_dir = os.path.abspath(os.path.expanduser(self.config["paths"]["sse_dir"]))
         self.image_dir = os.path.abspath(os.path.expanduser(self.config["paths"]["default_image_dir"]))
         
-        # SSE v2.2.x が出力する最新解析結果 JSON (Spec v1.6.2)
+        # SSE v2.2.x が出力する最新解析結果 JSON (Spec v1.6.3)
         self.latest_json_path = os.path.join(self.image_dir, "latest_shot.json")
         self.shutter_defaults = self.config["shutter_defaults"]
 
@@ -52,14 +52,15 @@ class SkySync:
             print(f"[Error] {script_name} failed: {e}")
             return False
 
-    def load_latest_coords(self):
-        """SSE v2.x / JSON Spec v1.6.2 構造の JSON から座標と解析統計を読み取る"""
-        if not os.path.exists(self.latest_json_path):
-            print(f"[Error] {self.latest_json_path} not found.")
+    def load_latest_coords(self, image_dir=None):
+        """SSE v2.x / JSON Spec v1.6.3 構造 of JSON から座標と解析統計を読み取る"""
+        json_path = os.path.join(image_dir, "latest_shot.json") if image_dir else self.latest_json_path
+        if not os.path.exists(json_path):
+            print(f"[Error] {json_path} not found.")
             return None, None
 
         try:
-            with open(self.latest_json_path, 'r', encoding='utf-8') as f:
+            with open(json_path, 'r', encoding='utf-8') as f:
                 data = json.load(f)
                 
                 # 辞書型（オブジェクト）とリスト型の両方を許容
@@ -123,38 +124,56 @@ class SkySync:
         print(f"[SkySync] Syncing to INDI [{self.device}]...")
         print(f" -> Converting RA: {ra_deg}° to {ra_hours}h")
         try:
-            # EQUATORIAL_EOD_COORD に RA(時)/DEC(度) をセット
-            cmd = ["indi_setprop", f"{self.device}.EQUATORIAL_EOD_COORD.RA={ra_hours};DEC={dec_val}"]
-            subprocess.run(cmd, check=True)
+            # 1. Ensure coordinate action is set to SYNC
+            cmd_mode = ["indi_setprop", f"{self.device}.ON_COORD_SET.SYNC=On"]
+            subprocess.run(cmd_mode, check=True)
+            print(f"[SkySync] Set ON_COORD_SET to SYNC for [{self.device}]")
+
+            # 2. Set EQUATORIAL_EOD_COORD to RA(hours)/DEC(deg) to perform the Sync
+            cmd_coord = ["indi_setprop", f"{self.device}.EQUATORIAL_EOD_COORD.RA={ra_hours};DEC={dec_val}"]
+            subprocess.run(cmd_coord, check=True)
             print(f"[SkySync] INDI Sync Complete: RA={ra_hours}h, Dec={dec_val}°")
         except Exception as e:
             print(f"[Error] INDI Sync failed: {e}")
+            raise
 
 def main():
-    parser = argparse.ArgumentParser(description="SkySync v2.0.2")
-    parser.add_argument('mode', choices=['full', 'sync', 'manual'])
+    parser = argparse.ArgumentParser(description="SkySync v2.2.0")
+    parser.add_argument('mode', choices=['full', 'sync', 'manual', 'solve'])
     parser.add_argument('--ra', type=float, help='Manual RA (deg)')
     parser.add_argument('--dec', type=float, help='Manual Dec (deg)')
+    parser.add_argument('--exposure', type=float, help='Exposure time (sec) for shutterpro03')
+    parser.add_argument('--count', type=int, help='Shot count for shutterpro03')
+    parser.add_argument('--shutter-mode', choices=['camera', 'bulb'], help='Shutter mode for shutterpro03')
+    parser.add_argument('--dir', type=str, help='Output directory for images')
+    parser.add_argument('--session', type=str, help='Session ID for shutterpro03')
     args, extra_args = parser.parse_known_args()
 
     ss = SkySync()
 
-    if args.mode in ["full", "sync"]:
-        if args.mode == "full":
+    if args.mode in ["full", "sync", "solve"]:
+        exposure = args.exposure if args.exposure is not None else ss.shutter_defaults["exposure"]
+        count = args.count if args.count is not None else ss.shutter_defaults["count"]
+        shutter_mode = args.shutter_mode if args.shutter_mode is not None else ss.shutter_defaults["mode"]
+        image_dir = os.path.abspath(os.path.expanduser(args.dir)) if args.dir is not None else ss.image_dir
+        session = args.session if args.session is not None else ss.shutter_defaults["session"]
+
+        if args.mode in ["full", "solve"]:
             # 1. 撮影実行 (shutterpro03.py)
             sh_args = [
-                ss.shutter_defaults["count"], ss.shutter_defaults["mode"], ss.shutter_defaults["exposure"],
-                f"sess={ss.shutter_defaults['session']}", f"t={ss.shutter_defaults['type']}",
-                f"dir={ss.image_dir}"
+                str(count), shutter_mode, str(exposure),
+                f"sess={session}", f"t={ss.shutter_defaults['type']}",
+                f"dir={image_dir}"
             ]
             if extra_args: sh_args.extend(extra_args)
             if not ss.run_tool(ss.shutter_dir, "shutterpro03.py", sh_args): return
 
         # 2. 解析実行 (SSE.py)
-        if ss.run_tool(ss.sse_dir, "SSE.py", ["latest", ss.image_dir]):
+        if ss.run_tool(ss.sse_dir, "SSE.py", ["latest", image_dir]):
             # 3. 解析済み JSON を読み込んで INDI 同期
-            ra, dec = ss.load_latest_coords()
-            ss.sync_to_indi(ra, dec)
+            ra, dec = ss.load_latest_coords(image_dir)
+            if args.mode != "solve":
+                ss.sync_to_indi(ra, dec)
 
     elif args.mode == "manual":
         # マニュアル同期（JSON構造に依存しない）

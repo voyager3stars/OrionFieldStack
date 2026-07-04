@@ -3,7 +3,7 @@
 # Component:    ShutterPro03 Logger & Analyzer
 # Author:       voyager3.stars
 # Web:          https://voyager3.stars.ne.jp
-# Version:      15.0.5 (JSON Log v1.6.2 Compliance)
+# Version:      15.0.6 (JSON Log v1.6.3 Compliance)
 # License:      MIT
 # Description:  Handles asynchronous image analysis and telemetry 
 #               logging. Extracts Exif metadata, merges it with 
