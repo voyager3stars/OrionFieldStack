@@ -1363,6 +1363,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const sfgFlatSession = document.getElementById('sfg-flat-session');
     const sfgFlatSessionList = document.getElementById('sfg-flat-session-list');
     const sfgViewFlatBtn = document.getElementById('sfg-view-flat-btn');
+    const sfgViewBgBtn = document.getElementById('sfg-view-bg-btn');
     const sfgViewDarkBtn = document.getElementById('sfg-view-dark-btn');
     const sfgUseDark = document.getElementById('sfg-use-dark');
     const sfgDarkFields = document.getElementById('sfg-dark-fields');
@@ -1380,6 +1381,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const sfgFilesSelectNone = document.getElementById('sfg-files-select-none');
     const sfgHistogramCanvas = document.getElementById('sfg-histogram-canvas');
     const sfgHistStats = document.getElementById('sfg-hist-stats');
+    const sfgFwhmHistogramCanvas = document.getElementById('sfg-fwhm-histogram-canvas');
+    const sfgFwhmHistStats = document.getElementById('sfg-fwhm-hist-stats');
+    const sfgBgHistogramCanvas = document.getElementById('sfg-bg-histogram-canvas');
+    const sfgBgHistStats = document.getElementById('sfg-bg-hist-stats');
     const sfgImagePreviewContainer = document.getElementById('sfg-image-preview-container');
     const sfgImageInfo = document.getElementById('sfg-image-info');
     const sfgReportsContainer = document.getElementById('sfg-reports-container');
@@ -1455,6 +1460,32 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
             let url = `/api/starforge/flat_view?dir=${encodeURIComponent(dir)}&session=${encodeURIComponent(session)}&_t=${new Date().getTime()}`;
+            const outDirEl = document.getElementById('sfg-out-dir');
+            if (outDirEl) {
+                const outDir = outDirEl.value.trim();
+                if (outDir) {
+                    url += `&out_dir=${encodeURIComponent(outDir)}`;
+                }
+            }
+            window.open(url, '_blank');
+        };
+    }
+
+    if (sfgViewBgBtn) {
+        sfgViewBgBtn.onclick = () => {
+            const logPath = document.getElementById('sfg-log-path').value.trim();
+            if (!logPath) {
+                alert('Please specify a Log Folder first.');
+                return;
+            }
+            let url = `/api/starforge/bg_view?dir=${encodeURIComponent(logPath)}&_t=${new Date().getTime()}`;
+            let targetSession = sfgSelectedSessionId;
+            if (!targetSession && selectedSfgSessions && selectedSfgSessions.size > 0) {
+                targetSession = Array.from(selectedSfgSessions)[0];
+            }
+            if (targetSession) {
+                url += `&session=${encodeURIComponent(targetSession)}`;
+            }
             const outDirEl = document.getElementById('sfg-out-dir');
             if (outDirEl) {
                 const outDir = outDirEl.value.trim();
@@ -1884,7 +1915,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         // Axes
-        ctx.strokeStyle = 'var(--glass-border)';
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
         ctx.lineWidth = 1;
         ctx.beginPath();
         ctx.moveTo(paddingLeft, height - paddingBottom);
@@ -1893,7 +1924,7 @@ document.addEventListener('DOMContentLoaded', () => {
         ctx.lineTo(paddingLeft, height - paddingBottom);
         ctx.stroke();
 
-        ctx.fillStyle = 'var(--text-dim)';
+        ctx.fillStyle = '#959da5';
         ctx.font = '9px JetBrains Mono';
         ctx.textAlign = 'center';
         ctx.fillText(rangeMin.toFixed(1), paddingLeft, height - paddingBottom + 12);
@@ -1908,6 +1939,259 @@ document.addEventListener('DOMContentLoaded', () => {
         const numStacked = values.filter(v => v <= threshold).length;
         const percentage = values.length > 0 ? ((numStacked / values.length) * 100).toFixed(0) : 0;
         sfgHistStats.textContent = `Stacking: ${numStacked}/${values.length} (${percentage}%)`;
+        
+        if (typeof drawFwhmHistogram === 'function') {
+            drawFwhmHistogram();
+        }
+        if (typeof drawBgHistogram === 'function') {
+            drawBgHistogram();
+        }
+    }
+
+    function drawFwhmHistogram() {
+        const ctx = sfgFwhmHistogramCanvas.getContext('2d');
+        const width = sfgFwhmHistogramCanvas.clientWidth;
+        const height = sfgFwhmHistogramCanvas.clientHeight;
+        sfgFwhmHistogramCanvas.width = width;
+        sfgFwhmHistogramCanvas.height = height;
+        ctx.clearRect(0, 0, width, height);
+
+        const threshold = parseFloat(sfgThreshold.value) || 0.20;
+        const values = [];
+        const checkedCheckboxes = sfgFileList.querySelectorAll('input[type="checkbox"]:checked');
+        checkedCheckboxes.forEach(cb => {
+            const fileName = cb.id.replace('sfg-file-cb-', '');
+            for (const records of sfgSessionsMap.values()) {
+                const r = records.find(x => x.record?.file?.name === fileName);
+                if (r) {
+                    const q = r.analysis?.SF?.quality || r.analysis?.quality || r.record?.analysis?.quality;
+                    const fwhmVal = q?.sf_fwhm_med;
+                    if (fwhmVal !== undefined && fwhmVal !== null) {
+                        const ellVal = q?.sf_ell_med;
+                        const isStacked = (ellVal !== undefined && ellVal !== null) ? ellVal <= threshold : false;
+                        values.push({ fwhm: fwhmVal, isStacked: isStacked });
+                    }
+                    break;
+                }
+            }
+        });
+
+        if (values.length === 0) {
+            sfgFwhmHistStats.textContent = 'No data';
+            ctx.fillStyle = '#959da5';
+            ctx.font = '11px Inter';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('No FWHM data available', width / 2, height / 2);
+            return;
+        }
+
+        const maxVal = Math.max(...values.map(v => v.fwhm), 2.0);
+        const minVal = Math.min(...values.map(v => v.fwhm), 0.0);
+        let rangeMax = maxVal * 1.1;
+        let rangeMin = Math.max(0, minVal * 0.9 - 0.1);
+        if (rangeMax === rangeMin) {
+            rangeMax += 1;
+            rangeMin = Math.max(0, rangeMin - 1);
+        }
+
+        const numBins = 20;
+        const bins = Array.from({ length: numBins }, () => ({ stacked: 0, rejected: 0 }));
+        values.forEach(v => {
+            let binIdx = Math.floor(((v.fwhm - rangeMin) / (rangeMax - rangeMin)) * numBins);
+            if (binIdx >= numBins) binIdx = numBins - 1;
+            if (binIdx < 0) binIdx = 0;
+            if (v.isStacked) {
+                bins[binIdx].stacked++;
+            } else {
+                bins[binIdx].rejected++;
+            }
+        });
+
+        const maxBinCount = Math.max(...bins.map(b => b.stacked + b.rejected), 1);
+        const paddingLeft = 25;
+        const paddingRight = 10;
+        const paddingTop = 15;
+        const paddingBottom = 20;
+
+        const chartWidth = width - paddingLeft - paddingRight;
+        const chartHeight = height - paddingTop - paddingBottom;
+        const binWidth = chartWidth / numBins;
+
+        bins.forEach((bin, i) => {
+            const x = paddingLeft + i * binWidth;
+            const stackedHeight = (bin.stacked / maxBinCount) * chartHeight;
+            const rejectedHeight = (bin.rejected / maxBinCount) * chartHeight;
+
+            // Draw stacked part
+            if (bin.stacked > 0) {
+                const yStacked = height - paddingBottom - stackedHeight;
+                ctx.fillStyle = 'rgba(0, 255, 136, 0.4)';
+                ctx.strokeStyle = 'rgba(0, 255, 136, 0.8)';
+                ctx.fillRect(x + 1, yStacked, binWidth - 2, stackedHeight);
+                ctx.strokeRect(x + 1, yStacked, binWidth - 2, stackedHeight);
+            }
+            
+            // Draw rejected part on top of stacked part
+            if (bin.rejected > 0) {
+                const yRejected = height - paddingBottom - stackedHeight - rejectedHeight;
+                ctx.fillStyle = 'rgba(255, 71, 87, 0.2)';
+                ctx.strokeStyle = 'rgba(255, 71, 87, 0.6)';
+                ctx.fillRect(x + 1, yRejected, binWidth - 2, rejectedHeight);
+                ctx.strokeRect(x + 1, yRejected, binWidth - 2, rejectedHeight);
+            }
+        });
+
+        // Axes
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(paddingLeft, height - paddingBottom);
+        ctx.lineTo(width - paddingRight, height - paddingBottom);
+        ctx.moveTo(paddingLeft, paddingTop);
+        ctx.lineTo(paddingLeft, height - paddingBottom);
+        ctx.stroke();
+
+        ctx.fillStyle = '#959da5';
+        ctx.font = '9px JetBrains Mono';
+        ctx.textAlign = 'center';
+        ctx.fillText(rangeMin.toFixed(1), paddingLeft, height - paddingBottom + 12);
+        ctx.fillText(((rangeMax + rangeMin) / 2).toFixed(1), paddingLeft + chartWidth / 2, height - paddingBottom + 12);
+        ctx.fillText(rangeMax.toFixed(1), width - paddingRight, height - paddingBottom + 12);
+
+        ctx.textAlign = 'right';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('0', paddingLeft - 5, height - paddingBottom);
+        ctx.fillText(maxBinCount.toString(), paddingLeft - 5, paddingTop);
+
+        const fwhmVals = values.map(v => v.fwhm);
+        fwhmVals.sort((a, b) => a - b);
+        const med = fwhmVals.length % 2 !== 0 ? fwhmVals[Math.floor(fwhmVals.length / 2)] : (fwhmVals[fwhmVals.length / 2 - 1] + fwhmVals[fwhmVals.length / 2]) / 2;
+        sfgFwhmHistStats.textContent = `Med: ${med.toFixed(2)} (${values.length} imgs)`;
+    }
+
+    function drawBgHistogram() {
+        const ctx = sfgBgHistogramCanvas.getContext('2d');
+        const width = sfgBgHistogramCanvas.clientWidth;
+        const height = sfgBgHistogramCanvas.clientHeight;
+        sfgBgHistogramCanvas.width = width;
+        sfgBgHistogramCanvas.height = height;
+        ctx.clearRect(0, 0, width, height);
+
+        const threshold = parseFloat(sfgThreshold.value) || 0.20;
+        const values = [];
+        const checkedCheckboxes = sfgFileList.querySelectorAll('input[type="checkbox"]:checked');
+        checkedCheckboxes.forEach(cb => {
+            const fileName = cb.id.replace('sfg-file-cb-', '');
+            for (const records of sfgSessionsMap.values()) {
+                const r = records.find(x => x.record?.file?.name === fileName);
+                if (r) {
+                    const q = r.analysis?.SF?.quality || r.analysis?.quality || r.record?.analysis?.quality;
+                    const bgVal = q?.sf_bg_median;
+                    if (bgVal !== undefined && bgVal !== null) {
+                        const ellVal = q?.sf_ell_med;
+                        const isStacked = (ellVal !== undefined && ellVal !== null) ? ellVal <= threshold : false;
+                        values.push({ bg: bgVal, isStacked: isStacked });
+                    }
+                    break;
+                }
+            }
+        });
+
+        if (values.length === 0) {
+            sfgBgHistStats.textContent = 'No data';
+            ctx.fillStyle = '#959da5';
+            ctx.font = '11px Inter';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('No Background data available', width / 2, height / 2);
+            return;
+        }
+
+        const maxVal = Math.max(...values.map(v => v.bg));
+        const minVal = Math.min(...values.map(v => v.bg));
+        let rangeMax = maxVal;
+        let rangeMin = minVal;
+        
+        // Add a small margin if max == min
+        if (rangeMax === rangeMin) {
+            rangeMax = rangeMax === 0 ? 1 : rangeMax * 1.1;
+            rangeMin = rangeMin === 0 ? 0 : rangeMin * 0.9;
+        }
+
+        const numBins = 20;
+        const bins = Array.from({ length: numBins }, () => ({ stacked: 0, rejected: 0 }));
+        values.forEach(v => {
+            let binIdx = Math.floor(((v.bg - rangeMin) / (rangeMax - rangeMin)) * numBins);
+            if (binIdx >= numBins) binIdx = numBins - 1;
+            if (binIdx < 0) binIdx = 0;
+            if (v.isStacked) {
+                bins[binIdx].stacked++;
+            } else {
+                bins[binIdx].rejected++;
+            }
+        });
+
+        const maxBinCount = Math.max(...bins.map(b => b.stacked + b.rejected), 1);
+        const paddingLeft = 25;
+        const paddingRight = 10;
+        const paddingTop = 15;
+        const paddingBottom = 20;
+
+        const chartWidth = width - paddingLeft - paddingRight;
+        const chartHeight = height - paddingTop - paddingBottom;
+        const binWidth = chartWidth / numBins;
+
+        bins.forEach((bin, i) => {
+            const x = paddingLeft + i * binWidth;
+            const stackedHeight = (bin.stacked / maxBinCount) * chartHeight;
+            const rejectedHeight = (bin.rejected / maxBinCount) * chartHeight;
+
+            // Draw stacked part
+            if (bin.stacked > 0) {
+                const yStacked = height - paddingBottom - stackedHeight;
+                ctx.fillStyle = 'rgba(0, 255, 136, 0.4)';
+                ctx.strokeStyle = 'rgba(0, 255, 136, 0.8)';
+                ctx.fillRect(x + 1, yStacked, binWidth - 2, stackedHeight);
+                ctx.strokeRect(x + 1, yStacked, binWidth - 2, stackedHeight);
+            }
+            
+            // Draw rejected part on top of stacked part
+            if (bin.rejected > 0) {
+                const yRejected = height - paddingBottom - stackedHeight - rejectedHeight;
+                ctx.fillStyle = 'rgba(255, 71, 87, 0.2)';
+                ctx.strokeStyle = 'rgba(255, 71, 87, 0.6)';
+                ctx.fillRect(x + 1, yRejected, binWidth - 2, rejectedHeight);
+                ctx.strokeRect(x + 1, yRejected, binWidth - 2, rejectedHeight);
+            }
+        });
+
+        // Axes
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(paddingLeft, height - paddingBottom);
+        ctx.lineTo(width - paddingRight, height - paddingBottom);
+        ctx.moveTo(paddingLeft, paddingTop);
+        ctx.lineTo(paddingLeft, height - paddingBottom);
+        ctx.stroke();
+
+        ctx.fillStyle = '#959da5';
+        ctx.font = '9px JetBrains Mono';
+        ctx.textAlign = 'center';
+        ctx.fillText(rangeMin.toFixed(1), paddingLeft, height - paddingBottom + 12);
+        ctx.fillText(((rangeMax + rangeMin) / 2).toFixed(1), paddingLeft + chartWidth / 2, height - paddingBottom + 12);
+        ctx.fillText(rangeMax.toFixed(1), width - paddingRight, height - paddingBottom + 12);
+
+        ctx.textAlign = 'right';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('0', paddingLeft - 5, height - paddingBottom);
+        ctx.fillText(maxBinCount.toString(), paddingLeft - 5, paddingTop);
+
+        const bgVals = values.map(v => v.bg);
+        bgVals.sort((a, b) => a - b);
+        const med = bgVals.length % 2 !== 0 ? bgVals[Math.floor(bgVals.length / 2)] : (bgVals[bgVals.length / 2 - 1] + bgVals[bgVals.length / 2]) / 2;
+        sfgBgHistStats.textContent = `Med: ${med.toFixed(2)} (${values.length} imgs)`;
     }
 
     sfgThreshold.oninput = () => {

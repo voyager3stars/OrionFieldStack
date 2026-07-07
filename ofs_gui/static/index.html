@@ -565,6 +565,14 @@
 
                     <!-- Column 2: Calibration Settings -->
                     <aside class="col-files" style="overflow-y: auto; max-height: calc(100vh - 120px); padding: 10px;">
+                        
+                        <div class="sse-controls-section" style="border-bottom: 1px solid var(--glass-border); padding-bottom: 15px; margin-bottom: 15px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <h3 class="sse-title" style="margin: 0;">Back Ground analysis</h3>
+                                <button type="button" id="sfg-view-bg-btn" class="btn-small">View</button>
+                            </div>
+                        </div>
+
                         <div class="sse-controls-section" style="border-bottom: none;">
                             <h3 class="sse-title">Calibration Settings</h3>
 
@@ -673,6 +681,38 @@
                             <div
                                 style="font-size: 0.7rem; color: var(--text-dim); margin-top: 4px; text-align: center;">
                                 Click histogram to set threshold. Shaded region (≤ threshold) will be stacked.
+                            </div>
+                        </div>
+
+                        <!-- FWHM Histogram Card -->
+                        <div class="metadata-card" style="margin: 0; padding: 12px;">
+                            <h3
+                                style="margin-top: 0; margin-bottom: 8px; display: flex; justify-content: space-between;">
+                                <span>FWHM Histogram</span>
+                                <span id="sfg-fwhm-hist-stats"
+                                    style="font-size: 0.75rem; color: var(--text-dim); font-weight: normal;">No
+                                    data</span>
+                            </h3>
+                            <div
+                                style="position: relative; background: rgba(0,0,0,0.4); border: 1px solid var(--glass-border); border-radius: 4px; padding: 10px; height: 160px;">
+                                <canvas id="sfg-fwhm-histogram-canvas"
+                                    style="width: 100%; height: 100%; display: block;"></canvas>
+                            </div>
+                        </div>
+
+                        <!-- BG Median Histogram Card -->
+                        <div class="metadata-card" style="margin: 0; padding: 12px;">
+                            <h3
+                                style="margin-top: 0; margin-bottom: 8px; display: flex; justify-content: space-between;">
+                                <span>Background Median Histogram</span>
+                                <span id="sfg-bg-hist-stats"
+                                    style="font-size: 0.75rem; color: var(--text-dim); font-weight: normal;">No
+                                    data</span>
+                            </h3>
+                            <div
+                                style="position: relative; background: rgba(0,0,0,0.4); border: 1px solid var(--glass-border); border-radius: 4px; padding: 10px; height: 160px;">
+                                <canvas id="sfg-bg-histogram-canvas"
+                                    style="width: 100%; height: 100%; display: block;"></canvas>
                             </div>
                         </div>
 

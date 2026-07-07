@@ -1320,6 +1320,656 @@ except Exception as e:
         return HTMLResponse(f"<html><body><h3>Error: {str(e)}</h3></body></html>", status_code=500)
 
 
+@app.get("/api/starforge/bg_view")
+async def starforge_bg_view(dir: str, session: str = "", file: str = "", out_dir: str = "", cx: str = "", cy: str = ""):
+    abs_dir = os.path.abspath(os.path.expanduser(dir))
+    log_file = os.path.join(abs_dir, "shutter_log.json")
+    
+    file_options = []
+    file_map = {}
+    bg_map = {}
+    
+    if os.path.exists(log_file):
+        try:
+            with open(log_file, "r") as f:
+                logs = json.load(f)
+            for record in logs:
+                if not session or record.get("session_id") == session:
+                    fname = record.get("record", {}).get("file", {}).get("name")
+                    fpath = record.get("record", {}).get("file", {}).get("path", "")
+                    if fname:
+                        full_p = os.path.join(fpath if fpath else abs_dir, fname)
+                        if fname not in file_map:
+                            file_options.append(fname)
+                            file_map[fname] = full_p
+                        
+                        sf = record.get("analysis", {}).get("SF", {})
+                        bg_img_info = sf.get("bg_image", {})
+                        if bg_img_info and isinstance(bg_img_info, dict):
+                            bg_path = bg_img_info.get("path", "")
+                            bg_name = bg_img_info.get("name", "")
+                            if bg_name:
+                                bg_full_path = os.path.join(bg_path if bg_path else abs_dir, bg_name)
+                                bg_map[fname] = bg_full_path
+        except Exception:
+            pass
+            
+    if not file_options and os.path.isdir(abs_dir):
+        for f in os.listdir(abs_dir):
+            if f.lower().endswith(('.fits', '.fit', '.dng', '.raw', '.cr2', '.nef', '.jpg', '.jpeg', '.png')):
+                if f not in file_map:
+                    full_p = os.path.join(abs_dir, f)
+                    file_options.append(f)
+                    file_map[f] = full_p
+                    
+    if not file_options:
+        from fastapi.responses import HTMLResponse
+        return HTMLResponse("<html><body><h3>Error: No background images found in the specified directory/session.</h3></body></html>", status_code=404)
+
+    if file and file in file_map:
+        selected_filename = file
+    else:
+        selected_filename = file_options[0]
+
+    target_file = file_map[selected_filename]
+    bg_image_path = bg_map.get(selected_filename, "")
+    
+    import urllib.parse
+    ext = os.path.splitext(target_file)[1].lower()
+    if ext in ['.fit', '.fits']:
+        preview_url = f"/api/fits/preview?path={urllib.parse.quote(target_file)}"
+    else:
+        preview_url = f"/api/logs/image?path={urllib.parse.quote(target_file)}"
+        
+    preview_html = f"""
+    <div style="width: 100%; display: flex; justify-content: center; align-items: center; background: #000; padding: 10px; box-sizing: border-box;">
+        <img src="{preview_url}" style="max-width: 100%; max-height: 200px; border-radius: 6px; object-fit: contain; box-shadow: 0 4px 6px rgba(0,0,0,0.3);">
+    </div>
+    """
+    
+    options_html = '<div class="list-title" style="padding: 6px 10px;">FILES</div>\n'
+
+    for opt in file_options:
+        sel = " selected" if opt == selected_filename else ""
+        options_html += f"""<div class="list-item{sel}" onclick="changeFile('{opt}')"><div class="file-name">{opt}</div></div>\n"""
+
+    python_code = """
+import sys
+import numpy as np
+import json
+from PIL import Image
+
+try:
+    from astropy.io import fits
+    has_astropy = True
+except ImportError:
+    has_astropy = False
+
+try:
+    import rawpy
+    has_rawpy = True
+except ImportError:
+    has_rawpy = False
+
+import os
+file_path = sys.argv[1]
+cx_str = sys.argv[2] if len(sys.argv) > 2 else ""
+cy_str = sys.argv[3] if len(sys.argv) > 3 else ""
+bg_image_path = sys.argv[4] if len(sys.argv) > 4 else ""
+cx = int(cx_str) if cx_str.lstrip("-").isdigit() else -1
+cy = int(cy_str) if cy_str.lstrip("-").isdigit() else -1
+
+def load_img(f_path):
+    if not f_path or not os.path.exists(f_path): return None
+    d = None
+    try:
+        ext = f_path.lower().split('.')[-1]
+        if ext in ['fits', 'fit']:
+            if has_astropy:
+                with fits.open(f_path) as hdul:
+                    for hdu in hdul:
+                        if hdu.data is not None:
+                            d2 = hdu.data
+                            if d2.ndim == 3:
+                                d = np.mean(d2, axis=0)
+                            else:
+                                d = d2
+                            break
+        elif ext in ['dng', 'cr2', 'nef', 'arw', 'raw']:
+            if has_rawpy:
+                with rawpy.imread(f_path) as raw:
+                    rgb = raw.postprocess(use_camera_wb=True, half_size=True, no_auto_bright=True, output_bps=16)
+                    d = np.mean(rgb, axis=2)
+        else:
+            img = Image.open(f_path).convert('L')
+            d = np.array(img)
+    except Exception:
+        pass
+    return d
+
+try:
+    data = load_img(file_path)
+    
+    if data is None:
+        print("<html><body><h3>Error: Unsupported file format or missing libraries.</h3></body></html>")
+        sys.exit(0)
+    
+    h, w = data.shape
+    scale_2d = max(1, round(w / 640))
+    scale_3d = max(1, round(w / 150))
+    
+    data_small_2d = data[::scale_2d, ::scale_2d]
+    data_small_3d = data[::scale_3d, ::scale_3d]
+    
+    z_data = data_small_2d.astype(float)
+    z_data = np.nan_to_num(z_data, nan=0.0, posinf=0.0, neginf=0.0)
+    
+    z_data_3d = data_small_3d.astype(float)
+    z_data_3d = np.nan_to_num(z_data_3d, nan=0.0, posinf=0.0, neginf=0.0)
+    
+    bg_data = load_img(bg_image_path)
+    if bg_data is not None:
+        h_bg, w_bg = bg_data.shape
+        scale_2d_bg = max(1, round(w_bg / 640))
+        scale_3d_bg = max(1, round(w_bg / 150))
+        z_data_bg = bg_data[::scale_2d_bg, ::scale_2d_bg].astype(float)
+        z_data_bg = np.nan_to_num(z_data_bg, nan=0.0, posinf=0.0, neginf=0.0)
+        z_data_3d_bg = bg_data[::scale_3d_bg, ::scale_3d_bg].astype(float)
+        z_data_3d_bg = np.nan_to_num(z_data_3d_bg, nan=0.0, posinf=0.0, neginf=0.0)
+        
+        ch_bg, cw_bg = z_data_bg.shape
+        mid_y_bg, mid_x_bg = ch_bg // 2, cw_bg // 2
+        x_slice_bg = z_data_bg[mid_y_bg, :].tolist()
+        y_slice_bg = z_data_bg[:, mid_x_bg].tolist()
+    else:
+        z_data_bg = np.array([[0.0]])
+        z_data_3d_bg = np.array([[0.0]])
+        x_slice_bg = []
+        y_slice_bg = []
+        
+    z_max = float(np.max(z_data))
+    if z_max <= 0:
+        z_max = 255.0
+    
+    # Calculate center slices for 2D plots
+    ch, cw = z_data.shape
+    mid_y, mid_x = ch // 2, cw // 2
+    x_slice = z_data[mid_y, :].tolist()
+    y_slice = z_data[:, mid_x].tolist()
+    
+    # Calculate 16x16 medians and MADs
+    grid_h, grid_w = h / 16.0, w / 16.0
+    medians_16x16 = np.zeros((16, 16))
+    mads_16x16 = np.zeros((16, 16))
+    for i in range(16):
+        for j in range(16):
+            r_start = int(i * grid_h)
+            r_end = int((i+1)*grid_h) if i < 15 else h
+            c_start = int(j * grid_w)
+            c_end = int((j+1)*grid_w) if j < 15 else w
+            region = data[r_start:r_end, c_start:c_end]
+            if region.size > 0:
+                med = float(np.median(region))
+                medians_16x16[i, j] = med
+                mads_16x16[i, j] = float(np.median(np.abs(region - med)))
+
+    html_template = '''
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <title>Background Image 3D View</title>
+        <link rel="stylesheet" href="/style.css">
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=JetBrains+Mono&display=swap" rel="stylesheet">
+        <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+        <style>
+            .flat-layout-3col {
+                display: grid;
+                grid-template-columns: 20% 50% 1fr;
+                gap: 1rem;
+                height: calc(100vh - 120px);
+            }
+            .col-files { background: var(--bg-sidebar); border: 1px solid var(--glass-border); border-radius: 12px; display: flex; flex-direction: column; overflow: hidden; }
+            .col-center { position: relative; background: var(--bg-card); border: 1px solid var(--glass-border); border-radius: 12px; display: flex; flex-direction: column; overflow: hidden; }
+            .col-right { display: flex; flex-direction: column; gap: 1rem; height: calc(100vh - 120px); }
+            .side-plot { flex: 1; background: var(--bg-card); border: 1px solid var(--glass-border); border-radius: 12px; overflow: hidden; position: relative; }
+            #plot { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+            /* Adjust list-item height and font based on previous request while keeping LOGDATA design */
+            .list-item { padding: 8px 8px !important; }
+            .file-name { font-size: 0.68rem !important; }
+        </style>
+        <script>
+            function changeFile(filename) {
+                var urlParams = new URLSearchParams(window.location.search);
+                urlParams.set('file', filename);
+                window.location.search = urlParams.toString();
+            }
+        </script>
+    </head>
+    <body>
+        <div class="container" style="max-width: 100%;">
+            <header>
+                <div class="header-main">
+                    <h1>OrionFieldStack <span class="v-tag">Background Viewer</span></h1>
+                </div>
+            </header>
+            
+            <main>
+                <div class="flat-layout-3col">
+                    <aside class="col-files">
+                        __PREVIEW__
+                        <div class="list-container" style="padding: 0; display: flex; flex-direction: column; flex: 1; overflow-y: auto;">
+                            __OPTIONS__
+                        </div>
+                    </aside>
+                    <div class="col-center">
+                        <!-- Z-AXIS CONTROL BAR -->
+                        <div style="display: flex; align-items: center; gap: 12px; background: var(--bg-card); padding: 8px 12px; border-bottom: 1px solid var(--glass-border);">
+                            <span style="font-size: 0.85rem; color: var(--accent-gold); font-weight: bold;">Z-AXIS</span>
+                            <label style="font-size: 0.8rem; color: var(--text-dim);">Min:</label>
+                            <input type="number" id="z-min" value="0" step="any" style="width: 100px; padding: 4px; border-radius: 4px; background: #000; color: #fff; border: 1px solid #444;" onchange="updateZRange()">
+                            <label style="font-size: 0.8rem; color: var(--text-dim);">Max:</label>
+                            <input type="number" id="z-max" value="__ZMAX__" step="any" style="width: 100px; padding: 4px; border-radius: 4px; background: #000; color: #fff; border: 1px solid #444;" onchange="updateZRange()">
+                            <button onclick="setRawFullScale()" style="padding: 4px 10px; background: #222; color: #eee; border: 1px solid #555; border-radius: 4px; cursor: pointer; font-size: 0.8rem;">RAW Full Scale</button>
+                            <button onclick="setBgFullScale()" style="padding: 4px 10px; background: #222; color: #eee; border: 1px solid #555; border-radius: 4px; cursor: pointer; font-size: 0.8rem;">BG Full Scale</button>
+                        </div>
+                        <div style="flex: 1; display: flex; flex-direction: row; gap: 10px; position: relative;">
+                            <div style="flex: 1; position: relative; border-right: 1px solid var(--glass-border);">
+                                <div style="position: absolute; top: 10px; left: 10px; z-index: 10; background: rgba(0,0,0,0.6); padding: 4px 8px; border-radius: 4px; color: var(--accent-gold); font-weight: bold; font-size: 0.8rem;">DNG / RAW</div>
+                                <div id="plot" style="width: 100%; height: 100%;"></div>
+                            </div>
+                            <div style="flex: 1; position: relative;">
+                                <div style="position: absolute; top: 10px; left: 10px; z-index: 10; background: rgba(0,0,0,0.6); padding: 4px 8px; border-radius: 4px; color: var(--accent-gold); font-weight: bold; font-size: 0.8rem;">Background Image</div>
+                                <div id="plot-bg" style="width: 100%; height: 100%;"></div>
+                            </div>
+                        </div>
+                        <div style="height: 35%; display: flex; gap: 10px; padding: 10px; border-top: 1px solid var(--glass-border); background: var(--bg-card);">
+                            <div style="flex: 1; display: flex; flex-direction: column;">
+                                <h3 style="margin: 0 0 8px 0; font-size: 0.8rem;">16x16 MEDIAN HEATMAP</h3>
+                                <div id="median-grid" style="display: grid; grid-template-columns: repeat(16, 1fr); gap: 1px; flex: 1;"></div>
+                            </div>
+                            <div style="flex: 1; display: flex; flex-direction: column;">
+                                <h3 style="margin: 0 0 8px 0; font-size: 0.8rem;">16x16 MAD HEATMAP (Median Absolute Deviation)</h3>
+                                <div id="mad-grid" style="display: grid; grid-template-columns: repeat(16, 1fr); gap: 1px; flex: 1;"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-right">
+                        <div id="plot-xz" class="side-plot"></div>
+                        <div id="plot-yz" class="side-plot"></div>
+                    </div>
+                </div>
+            </main>
+        </div>
+        <script>
+            var z_data = __ZDATA3D__;
+            var x_slice = __XSLICE__;
+            var y_slice = __YSLICE__;
+            var x_slice_bg = __XSLICE_BG__;
+            var y_slice_bg = __YSLICE_BG__;
+ 
+            // 3D Plot
+            var data3d = [{
+                z: z_data,
+                type: 'surface',
+                colorscale: 'Viridis',
+                cmin: 0,
+                cmax: __ZMAX__,
+                showscale: false
+            }];
+            var aspect_x = z_data[0].length / Math.max(z_data.length, z_data[0].length);
+            var aspect_y = z_data.length / Math.max(z_data.length, z_data[0].length);
+
+            var layout3d = {
+                autosize: true,
+                scene: {
+                    xaxis: { title: 'X', showgrid: true, zeroline: true, showline: true, showticklabels: true },
+                    yaxis: { title: 'Y', showgrid: true, zeroline: true, showline: true, showticklabels: true, autorange: 'reversed' },
+                    zaxis: { title: 'Luminance', range: [0, __ZMAX__], autorange: false },
+                    aspectmode: 'manual',
+                    aspectratio: { x: aspect_x, y: aspect_y, z: 0.25 },
+                    camera: {
+                        eye: {x: -1.5, y: -1.5, z: 1.2}
+                    }
+                },
+                margin: { l: 0, r: 0, b: 0, t: 0 },
+                paper_bgcolor: '#121212',
+                plot_bgcolor: '#121212'
+            };
+            Plotly.newPlot('plot', data3d, layout3d, {responsive: true});
+
+            var z_data_bg = __ZDATA3D_BG__;
+            if (z_data_bg && z_data_bg.length > 0 && z_data_bg[0].length > 1) {
+                var data3d_bg = [{
+                    z: z_data_bg,
+                    type: 'surface',
+                    colorscale: 'Viridis',
+                    cmin: 0,
+                    cmax: __ZMAX__,
+                    showscale: false
+                }];
+                var aspect_x_bg = z_data_bg[0].length / Math.max(z_data_bg.length, z_data_bg[0].length);
+                var aspect_y_bg = z_data_bg.length / Math.max(z_data_bg.length, z_data_bg[0].length);
+
+                var layout3d_bg = {
+                    autosize: true,
+                    scene: {
+                        xaxis: { title: 'X', showgrid: true, zeroline: true, showline: true, showticklabels: true },
+                        yaxis: { title: 'Y', showgrid: true, zeroline: true, showline: true, showticklabels: true, autorange: 'reversed' },
+                        zaxis: { title: 'Luminance', range: [0, __ZMAX__], autorange: false },
+                        aspectmode: 'manual',
+                        aspectratio: { x: aspect_x_bg, y: aspect_y_bg, z: 0.25 },
+                        camera: {
+                            eye: {x: -1.5, y: -1.5, z: 1.2}
+                        }
+                    },
+                    margin: { l: 0, r: 0, b: 0, t: 0 },
+                    paper_bgcolor: '#121212',
+                    plot_bgcolor: '#121212'
+                };
+                Plotly.newPlot('plot-bg', data3d_bg, layout3d_bg, {responsive: true});
+                
+                // Sync 3D plots in real-time
+                var plotEl = document.getElementById('plot');
+                var plotBgEl = document.getElementById('plot-bg');
+                
+                var activePlot = null;
+                var lastCamString = "";
+                var isRelayouting = false;
+                
+                plotEl.addEventListener('mouseenter', function() { activePlot = plotEl; });
+                plotBgEl.addEventListener('mouseenter', function() { activePlot = plotBgEl; });
+                plotEl.addEventListener('mouseleave', function() { if(activePlot === plotEl) activePlot = null; });
+                plotBgEl.addEventListener('mouseleave', function() { if(activePlot === plotBgEl) activePlot = null; });
+                
+                function syncCameras() {
+                    if (activePlot && !isRelayouting) {
+                        var source = activePlot;
+                        var target = (activePlot === plotEl) ? plotBgEl : plotEl;
+                        
+                        if (source._fullLayout && source._fullLayout.scene) {
+                            var cam = null;
+                            if (source._fullLayout.scene._scene && typeof source._fullLayout.scene._scene.getCamera === 'function') {
+                                cam = source._fullLayout.scene._scene.getCamera();
+                            } else if (typeof source._fullLayout.scene.getCamera === 'function') {
+                                cam = source._fullLayout.scene.getCamera();
+                            } else {
+                                cam = source._fullLayout.scene.camera;
+                            }
+                            
+                            if (cam) {
+                                // Extract only eye, center, up to avoid circular references
+                                var cleanCam = {
+                                    center: cam.center || {x:0, y:0, z:0},
+                                    eye: cam.eye || {x:1.25, y:1.25, z:1.25},
+                                    up: cam.up || {x:0, y:0, z:1}
+                                };
+                                var camString = JSON.stringify(cleanCam);
+                                if (camString !== lastCamString) {
+                                    isRelayouting = true;
+                                    lastCamString = camString;
+                                    Plotly.relayout(target, {'scene.camera': cleanCam})
+                                        .then(function() { isRelayouting = false; })
+                                        .catch(function() { isRelayouting = false; });
+                                }
+                            }
+                        }
+                    }
+                    requestAnimationFrame(syncCameras);
+                }
+                requestAnimationFrame(syncCameras);
+            } else {
+                document.getElementById('plot-bg').innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text-dim);">No Background Image</div>';
+            }
+            // X-Z Section
+            var dataXZ = [
+                { y: x_slice, type: 'scatter', mode: 'lines', name: 'DNG Ctr', line: {color: '#00ff88', dash: 'dash'} },
+                { y: x_slice, type: 'scatter', mode: 'lines', name: 'DNG Sel', line: {color: '#ffffff'} },
+                { y: x_slice_bg, type: 'scatter', mode: 'lines', name: 'BG Ctr', line: {color: '#aaaaaa', dash: 'dash'} },
+                { y: x_slice_bg, type: 'scatter', mode: 'lines', name: 'BG Sel', line: {color: '#88aaff'} }
+            ];
+            var layoutXZ = {
+                title: 'X-Z Section (Center & Selected)',
+                paper_bgcolor: '#121212',
+                plot_bgcolor: '#121212',
+                font: {color: '#fff'},
+                margin: {t: 40, b: 40, l: 40, r: 20},
+                xaxis: { title: 'X', showgrid: true, gridcolor: '#333' },
+                yaxis: { title: 'Luminance', showgrid: true, gridcolor: '#333', range: [0, __ZMAX__] },
+                showlegend: true,
+                legend: { x: 1, xanchor: 'right', y: 1, bgcolor: 'rgba(0,0,0,0)', font: {size: 10} }
+            };
+            Plotly.newPlot('plot-xz', dataXZ, layoutXZ, {responsive: true});
+
+            // Y-Z Section
+            var dataYZ = [
+                { y: y_slice, type: 'scatter', mode: 'lines', name: 'DNG Ctr', line: {color: '#ff0088', dash: 'dash'} },
+                { y: y_slice, type: 'scatter', mode: 'lines', name: 'DNG Sel', line: {color: '#ffffff'} },
+                { y: y_slice_bg, type: 'scatter', mode: 'lines', name: 'BG Ctr', line: {color: '#aaaaaa', dash: 'dash'} },
+                { y: y_slice_bg, type: 'scatter', mode: 'lines', name: 'BG Sel', line: {color: '#ffaa88'} }
+            ];
+            var layoutYZ = {
+                title: 'Y-Z Section (Center & Selected)',
+                paper_bgcolor: '#121212',
+                plot_bgcolor: '#121212',
+                font: {color: '#fff'},
+                margin: {t: 40, b: 40, l: 40, r: 20},
+                xaxis: { title: 'Y', showgrid: true, gridcolor: '#333' },
+                yaxis: { title: 'Luminance', showgrid: true, gridcolor: '#333', range: [0, __ZMAX__] },
+                showlegend: true,
+                legend: { x: 1, xanchor: 'right', y: 1, bgcolor: 'rgba(0,0,0,0)', font: {size: 10} }
+            };
+            Plotly.newPlot('plot-yz', dataYZ, layoutYZ, {responsive: true});
+
+            // Add click event for 3D plot to update selected cross-sections
+            var plotDiv = document.getElementById('plot');
+            var plotBgDiv = document.getElementById('plot-bg');
+            var z_data_full = __ZDATA__;
+            var z_data_bg_full = __ZDATABG__;
+            
+            function updateCrossSections(pt, source_len, source_width) {
+                var x_idx = Math.round(pt.x);
+                var y_idx = Math.round(pt.y);
+                
+                // For DNG
+                if (y_idx >= 0 && y_idx < source_len && x_idx >= 0 && x_idx < source_width) {
+                    var dng_y = Math.round(y_idx * (__ZDATA_FULL_LENGTH__ / source_len));
+                    var dng_x = Math.round(x_idx * (__ZDATA_FULL_WIDTH__ / source_width));
+                    if (dng_y >= 0 && dng_y < z_data_full.length) {
+                        var new_x_slice = z_data_full[dng_y];
+                        var new_y_slice = z_data_full.map(function(row) { return row[dng_x]; });
+                        Plotly.update('plot-xz', { y: [new_x_slice] }, {}, [1]);
+                        Plotly.update('plot-yz', { y: [new_y_slice] }, {}, [1]);
+                    }
+                }
+                
+                // For BG
+                if (z_data_bg_full && z_data_bg_full.length > 0) {
+                    var bg_h = z_data_bg_full.length;
+                    var bg_w = z_data_bg_full[0].length;
+                    var bg_y_idx = Math.round(y_idx * (bg_h / source_len));
+                    var bg_x_idx = Math.round(x_idx * (bg_w / source_width));
+                    if (bg_y_idx >= 0 && bg_y_idx < bg_h && bg_x_idx >= 0 && bg_x_idx < bg_w) {
+                        var new_x_slice_bg = z_data_bg_full[bg_y_idx];
+                        var new_y_slice_bg = z_data_bg_full.map(function(row) { return row[bg_x_idx]; });
+                        Plotly.update('plot-xz', { y: [new_x_slice_bg] }, {}, [3]);
+                        Plotly.update('plot-yz', { y: [new_y_slice_bg] }, {}, [3]);
+                    }
+                }
+            }
+
+            if (plotDiv) {
+                plotDiv.on('plotly_click', function(data) {
+                    if (data.points && data.points.length > 0) updateCrossSections(data.points[0], z_data.length, z_data[0].length);
+                });
+            }
+            if (plotBgDiv) {
+                plotBgDiv.on('plotly_click', function(data) {
+                    if (data.points && data.points.length > 0) updateCrossSections(data.points[0], z_data_bg.length, z_data_bg[0].length);
+                });
+            }
+
+            // Populate 16x16 Grid
+            var medians = __MEDIANS_16X16__;
+            var max_med = -Infinity;
+            var min_med = Infinity;
+            for(var i=0; i<16; i++) {
+                for(var j=0; j<16; j++) {
+                    if (medians[i][j] > max_med) max_med = medians[i][j];
+                    if (medians[i][j] < min_med) min_med = medians[i][j];
+                }
+            }
+            var gridHtml = '';
+            for (var i = 0; i < 16; i++) {
+                for (var j = 0; j < 16; j++) {
+                    var val = medians[i][j];
+                    var norm = max_med > min_med ? (val - min_med) / (max_med - min_med) : 0;
+                    var r = Math.round(30 + norm * 225);
+                    var g = Math.round(30 + norm * 21);
+                    var b = Math.round(30 + norm * 72);
+                    gridHtml += `<div style="background: rgb(${r},${g},${b}); display: flex; align-items: center; justify-content: center; font-size: 0.45rem; color: #fff; font-family: 'JetBrains Mono', monospace; padding: 2px 0;" title="Row ${i+1}, Col ${j+1}: ${val}">${Number(val.toPrecision(3))}</div>`;
+                }
+            }
+            document.getElementById('median-grid').innerHTML = gridHtml;
+
+            // Populate 16x16 MAD Grid
+            var mads = __MADS_16X16__;
+            var max_mad = -Infinity;
+            var min_mad = Infinity;
+            for(var i=0; i<16; i++) {
+                for(var j=0; j<16; j++) {
+                    if (mads[i][j] > max_mad) max_mad = mads[i][j];
+                    if (mads[i][j] < min_mad) min_mad = mads[i][j];
+                }
+            }
+            var madGridHtml = '';
+            for (var i = 0; i < 16; i++) {
+                for (var j = 0; j < 16; j++) {
+                    var val = mads[i][j];
+                    var norm = max_mad > min_mad ? (val - min_mad) / (max_mad - min_mad) : 0;
+                    var r = Math.round(30 + norm * 123);
+                    var g = Math.round(30 + norm * 21);
+                    var b = Math.round(30 + norm * 225);
+                    madGridHtml += `<div style="background: rgb(${r},${g},${b}); display: flex; align-items: center; justify-content: center; font-size: 0.45rem; color: #fff; font-family: 'JetBrains Mono', monospace; padding: 2px 0;" title="Row ${i+1}, Col ${j+1}: ${val}">${Number(val.toPrecision(3))}</div>`;
+                }
+            }
+            document.getElementById('mad-grid').innerHTML = madGridHtml;
+
+            function updateZRange() {
+                var zmin = parseFloat(document.getElementById('z-min').value);
+                var zmax = parseFloat(document.getElementById('z-max').value);
+                if (isNaN(zmin)) zmin = 0;
+                if (isNaN(zmax)) zmax = __ZMAX__;
+                
+                Plotly.relayout('plot', {
+                    'scene.zaxis.range': [zmin, zmax],
+                    'scene.zaxis.autorange': false
+                });
+                Plotly.restyle('plot', {
+                    cmin: [zmin],
+                    cmax: [zmax]
+                });
+                
+                var bg_plot_div = document.getElementById('plot-bg');
+                if (bg_plot_div && bg_plot_div.data) {
+                    Plotly.relayout('plot-bg', {
+                        'scene.zaxis.range': [zmin, zmax],
+                        'scene.zaxis.autorange': false
+                    });
+                    Plotly.restyle('plot-bg', {
+                        cmin: [zmin],
+                        cmax: [zmax]
+                    });
+                }
+                Plotly.relayout('plot-xz', {
+                    'yaxis.range': [zmin, zmax],
+                    'yaxis.autorange': false
+                });
+                Plotly.relayout('plot-yz', {
+                    'yaxis.range': [zmin, zmax],
+                    'yaxis.autorange': false
+                });
+            }
+            
+            function roundToTwoSigFigs(num) {
+                if (num === 0) return 0;
+                return Number(num.toPrecision(2));
+            }
+            
+            function getMatrixMax(matrix) {
+                if (!matrix || matrix.length === 0) return 0;
+                var maxVal = -Infinity;
+                for (var i = 0; i < matrix.length; i++) {
+                    for (var j = 0; j < matrix[i].length; j++) {
+                        if (matrix[i][j] > maxVal) maxVal = matrix[i][j];
+                    }
+                }
+                return maxVal;
+            }
+            
+            function setRawFullScale() {
+                if (typeof z_data !== 'undefined' && z_data && z_data.length > 0) {
+                    var rawMax = getMatrixMax(z_data);
+                    var newMax = roundToTwoSigFigs(rawMax * 1.1);
+                    document.getElementById('z-max').value = newMax;
+                    updateZRange();
+                }
+            }
+            
+            function setBgFullScale() {
+                if (typeof z_data_bg !== 'undefined' && z_data_bg && z_data_bg.length > 0) {
+                    var bgMax = getMatrixMax(z_data_bg);
+                    var newMax = roundToTwoSigFigs(bgMax * 1.1);
+                    document.getElementById('z-max').value = newMax;
+                    updateZRange();
+                }
+            }
+            
+            // Force apply range once to ensure 3D scene correctly clips
+            updateZRange();
+        </script>
+    </body>
+    </html>
+    '''
+    html = html_template.replace('__FILENAME__', file_path)\
+        .replace('__ZDATA3D__', json.dumps(z_data_3d.tolist()))\
+        .replace('__ZDATA3D_BG__', json.dumps(z_data_3d_bg.tolist()))\
+        .replace('__ZDATA__', json.dumps(z_data.tolist()))\
+        .replace('__XSLICE__', json.dumps(x_slice))\
+        .replace('__YSLICE__', json.dumps(y_slice))\
+        .replace('__XSLICE_BG__', json.dumps(x_slice_bg))\
+        .replace('__YSLICE_BG__', json.dumps(y_slice_bg))\
+        .replace('__ZDATABG__', json.dumps(z_data_bg.tolist()))\
+        .replace('__ZMAX__', str(z_max))\
+        .replace('__ZDATA_FULL_LENGTH__', str(len(z_data)))\
+        .replace('__ZDATA_FULL_WIDTH__', str(len(z_data[0]) if len(z_data) > 0 else 0))\
+        .replace('__MEDIANS_16X16__', json.dumps(medians_16x16.tolist()))\
+        .replace('__MADS_16X16__', json.dumps(mads_16x16.tolist()))
+    print(html)
+except Exception as e:
+    print(f"<html><body><h3>Error processing image: {str(e)}</h3></body></html>")
+"""
+    try:
+        from fastapi.responses import HTMLResponse
+        proc = await asyncio.create_subprocess_exec(
+            get_starforge_python(), "-c", python_code, target_file,
+            cx, cy, bg_image_path,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE
+        )
+        stdout, stderr = await proc.communicate()
+        if proc.returncode != 0:
+            return HTMLResponse(f"<html><body><h3>Error: Script execution failed.</h3><pre>{stderr.decode(errors='replace')}</pre></body></html>", status_code=500)
+            
+        final_html = stdout.decode(errors='replace').replace('__PREVIEW__', preview_html).replace('__OPTIONS__', options_html)
+        return HTMLResponse(final_html)
+    except Exception as e:
+        from fastapi.responses import HTMLResponse
+        return HTMLResponse(f"<html><body><h3>Error: {str(e)}</h3></body></html>", status_code=500)
+
+
+
+
 
 def get_dark_target_file(dir: str, session: str, file: str, out_dir: str):
     abs_dir = os.path.abspath(os.path.expanduser(dir))
@@ -1338,7 +1988,7 @@ def get_dark_target_file(dir: str, session: str, file: str, out_dir: str):
                     fpath = record.get("record", {}).get("file", {}).get("path", "")
                     if fname:
                         full_p = os.path.join(fpath if fpath else abs_dir, fname)
-                        if os.path.exists(full_p) and fname not in file_map:
+                        if fname not in file_map:
                             file_options.append(fname)
                             file_map[fname] = full_p
         except Exception:
