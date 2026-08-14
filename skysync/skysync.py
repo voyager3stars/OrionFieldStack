@@ -139,7 +139,7 @@ class SkySync:
 
 def main():
     parser = argparse.ArgumentParser(description="SkySync v2.2.0")
-    parser.add_argument('mode', choices=['full', 'sync', 'manual', 'solve'])
+    parser.add_argument('mode', choices=['full', 'sync', 'manual', 'solve', 'solve_only'])
     parser.add_argument('--ra', type=float, help='Manual RA (deg)')
     parser.add_argument('--dec', type=float, help='Manual Dec (deg)')
     parser.add_argument('--exposure', type=float, help='Exposure time (sec) for shutterpro03')
@@ -151,7 +151,7 @@ def main():
 
     ss = SkySync()
 
-    if args.mode in ["full", "sync", "solve"]:
+    if args.mode in ["full", "sync", "solve", "solve_only"]:
         exposure = args.exposure if args.exposure is not None else ss.shutter_defaults["exposure"]
         count = args.count if args.count is not None else ss.shutter_defaults["count"]
         shutter_mode = args.shutter_mode if args.shutter_mode is not None else ss.shutter_defaults["mode"]
@@ -172,7 +172,7 @@ def main():
         if ss.run_tool(ss.sse_dir, "SSE.py", ["latest", image_dir]):
             # 3. 解析済み JSON を読み込んで INDI 同期
             ra, dec = ss.load_latest_coords(image_dir)
-            if args.mode != "solve":
+            if args.mode not in ["solve", "solve_only"]:
                 ss.sync_to_indi(ra, dec)
 
     elif args.mode == "manual":

@@ -1478,22 +1478,57 @@ document.addEventListener('DOMContentLoaded', () => {
                 alert('Please specify a Log Folder first.');
                 return;
             }
-            let url = `/api/starforge/bg_view?dir=${encodeURIComponent(logPath)}&_t=${new Date().getTime()}`;
             let targetSession = sfgSelectedSessionId;
             if (!targetSession && selectedSfgSessions && selectedSfgSessions.size > 0) {
                 targetSession = Array.from(selectedSfgSessions)[0];
             }
+
+            const inputFiles = [];
+            const checkedBoxes = document.querySelectorAll('.sfg-file-cb:checked');
+            checkedBoxes.forEach(cb => {
+                const fileName = cb.id.replace('sfg-file-cb-', '');
+                inputFiles.push(fileName);
+            });
+
+            const form = document.createElement('form');
+            form.target = '_blank';
+            form.method = 'POST';
+            form.action = '/api/starforge/bg_view';
+
+            const dirInput = document.createElement('input');
+            dirInput.type = 'hidden';
+            dirInput.name = 'dir';
+            dirInput.value = logPath;
+            form.appendChild(dirInput);
+
             if (targetSession) {
-                url += `&session=${encodeURIComponent(targetSession)}`;
+                const sessionInput = document.createElement('input');
+                sessionInput.type = 'hidden';
+                sessionInput.name = 'session';
+                sessionInput.value = targetSession;
+                form.appendChild(sessionInput);
             }
+
+            if (inputFiles.length > 0) {
+                const filesInput = document.createElement('input');
+                filesInput.type = 'hidden';
+                filesInput.name = 'files';
+                filesInput.value = inputFiles.join(',');
+                form.appendChild(filesInput);
+            }
+
             const outDirEl = document.getElementById('sfg-out-dir');
-            if (outDirEl) {
-                const outDir = outDirEl.value.trim();
-                if (outDir) {
-                    url += `&out_dir=${encodeURIComponent(outDir)}`;
-                }
+            if (outDirEl && outDirEl.value.trim()) {
+                const outDirInput = document.createElement('input');
+                outDirInput.type = 'hidden';
+                outDirInput.name = 'out_dir';
+                outDirInput.value = outDirEl.value.trim();
+                form.appendChild(outDirInput);
             }
-            window.open(url, '_blank');
+
+            document.body.appendChild(form);
+            form.submit();
+            document.body.removeChild(form);
         };
     }
 

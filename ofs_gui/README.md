@@ -155,17 +155,34 @@ python3 app.py
 
 ## 📁 ディレクトリ構成
 
-* `app.py`: FastAPIによるWebバックエンドAPI（ShutterPro、SSE、Starflux、Starforge、SkySyncのバックグラウンドプロセス管理、設定の保存読込、画像・ログ閲覧など）。
-* `requirements.txt`: Pythonの依存パッケージリスト（FastAPI, Uvicorn, rawpy, Pillow, imageioなど）。
+* `app.py`: FastAPIによるWebバックエンドAPIのエントリーポイント。各モジュールからルーターをインポートして集約マウントし、サーバー起動時のバックグラウンドタスク（INDIテレメトリやFlashAirの監視ループ）の起動を担います。
+* `core/`: アプリケーション全体で共有されるコアモジュール。
+  - `config.py`: `BASE_DIR` や `SHUTTERPRO_PATH` など、外部スクリプトの実行パスや環境依存の設定値を一元管理します。
+  - `state.py`: バックグラウンドプロセスの参照（`running_process`, `sse_process` 等）や非同期実行ロック（`asyncio.Lock`）、およびリアルタイムテレメトリ情報を保持するグローバルステート管理モジュールです。
+* `routers/`: 各機能ごとのエンドポイントを分割したAPIルーター群。
+  - `api_shutter.py`: 撮影自動化スクリプト「ShutterPro」の起動(`/api/shutter/start`)、停止、および標準出力のストリーミングログ(`/api/shutter/logs`)を管理します。
+  - `api_sse.py`: 天体位置解析エンジン「SkySolverEngine (SSE)」の実行制御とリアルタイムログストリーミングを提供します。
+  - `api_starflux.py`: 測光・星像解析ツール「Starflux」の実行制御と、結果のログ監視を行います。
+  - `api_starforge.py`: 画像スタックツール「Starforge」の実行制御、およびスタック済みFITファイルのリスト取得や簡易プレビュー生成を担当します。
+  - `api_starforge_views.py`: Flat Viewer（フラット画像の3D輝度ムラ解析）、Background Viewer（背景画像のサイドバイサイド3D比較）、Dark Viewer（ホットピクセルのヒートマップ・3D解析）など、高度で重い画像解析ロジックを集約したモジュールです。
+  - `api_system.py`: アプリケーション全体のステータス取得(`/api/status`)、テレメトリ情報取得(`/api/telemetry`)、GUI設定の保存・読込機能、およびディレクトリ階層のリスト取得(`/api/utils/list_dirs`)を提供します。
+  - `api_logs.py`: 撮影セッションごとの `shutter_log.json` の参照や、DNG/RAW現像、FITSを含む各種画像ファイルの動的なプレビュー画像（サムネイル）返却を行います。
+* `requirements.txt`: Pythonの依存パッケージリスト（FastAPI, Uvicorn, rawpy, Pillow, astropy, plotly, scipyなど）。
 * `static/`: HTML/CSS/JavaScriptによるフロントエンドソース。
   - `index.html`: グラスモルフィズムスタイルを採用したレスポンシブHTML構造（SHUTTER, LOGDATA, STARFORGE, SYNCの4タブ構成）。
-  - `style.css`: 天体観測の夜間使用に適した目に優しいダークテーマ、モーダル、スピナーアニメーション等のスタイル。
-  - `script.js`: 各種API連携、EventSourceストリーミング、ズーム・パン、動的なステータスバー表示などのインタラクティブ制御ロジック。
-* `ofs_gui_sp03_config.json`: Web GUIのデフォルト設定保存用 JSON ファイル。
+  - `style.css`: 天体観測の夜間使用に適した目に優しいダークテーマ、モーダル、スピナーアニメーション等の高度なUIスタイル。
+  - `script.js`: 各APIエンドポイントとの非同期通信、Server-Sent Events(SSE)によるリアルタイムログ受信、3Dグラフ連携などを担うフロントエンド制御ロジック。
+* `ofs_gui_sp03_config.json`: Web GUIのパラメータ状態を保存・復元するための JSON 形式の設定ファイル。
 
 ---
 
 ## 📝 更新履歴
+
+### v1.5.0 (2026-07-08)
+* **バックエンド(app.py)のアーキテクチャ刷新・モジュール分割**:
+  - 約3000行に肥大化していた `app.py` を、FastAPIの `APIRouter` を活用して機能ごとに安全に分割（Shutter, SSE, Starflux, Starforge, Views, System, Logs）。
+  - グローバル変数やプロセス・ロック管理を `core/state.py` へ、パス定義を `core/config.py` へ分離し、保守性と拡張性を大幅に向上させました。
+  - `astropy` や `numpy` などの重い解析ライブラリを必要なビュー関数内でのみインポートする元来の最適化を維持し、起動速度とメモリ使用量を改善。
 
 ### v1.4.6 (2026-07-07)
 * **Background Viewer（背景画像解析ビューア）の独立と機能拡張**:

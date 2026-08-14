@@ -27,8 +27,8 @@ SkySyncがハブとなり、各コンポーネントを繋いで観測を進行�
 ```json
 {
     "paths": {
-        "shutter_pro_dir": "~/OrionFieldStack/shuterpro03",
-        "sse_dir": "~/OrionFieldStack/SSE",
+        "shutter_pro_dir": "~/Python/OrionFieldStack/shutterpro03",
+        "sse_dir": "~/Python/OrionFieldStack/SSE",
         "default_image_dir": "~/Pictures/sync"
     },
     "indi": {
@@ -55,7 +55,17 @@ python3 skysync.py full
 ```Bash
 python3 skysync.py sync
 ```
-## 3. マニュアル同期モード
+## 3. 撮影・解析モード (Capture + Solve)
+撮影を実行し解析を行いますが、架台への同期はスキップします。
+```Bash
+python3 skysync.py solve
+```
+## 4. 解析のみモード (Solve Only)
+撮影も同期も行わず、最新画像の解析のみを実行します。
+```Bash
+python3 skysync.py solve_only
+```
+## 5. マニュアル同期モード
 解析結果を使わず、指定した座標を直接架台へ送信します。
 ```Bash
 python3 skysync.py manual --ra 83.82 --dec -5.39
