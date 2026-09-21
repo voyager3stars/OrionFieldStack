@@ -21,25 +21,9 @@ ShutterPro03は、Raspberry Piを用いた天体撮影における物理シャ�
 
 ## 🛠️ インストールとセットアップ
 
-### 1. ディレクトリの移動
-```bash
-cd OrionFieldStack/shutterpro03
-```
-
-### 2. 専用仮想環境(venv)の作成
-システムのライブラリ（RPi.GPIOなど）を参照できるようにしつつ、独立した実行環境を作成します。
-```bash
-# 仮想環境の作成（システムパッケージを引用）
-python3 -m venv --system-site-packages venv
-
-# 仮想環境の有効化
-source venv/bin/activate
-```
-
-### 3. 依存ライブラリのインストール
-```bash
-pip install -r requirements.txt
-```
+### 1. セットアップ
+本モジュールの依存パッケージは、プロジェクトルートの `requirements.txt` で一括管理されています。
+セットアップ方法は [プロジェクトルートの README](../README.md) を参照してください。
 
 ---
 
@@ -104,7 +88,7 @@ python3 shutterpro03.py [shots] [mode] [exposure_sec] [options...]
 * **shots**: 撮影枚数（必須。0を指定すると無限撮影）。
 * **mode**: シャッターモード (`bulb` または `camera`)。
 * **exposure_sec**: 1枚あたりの露出時間（秒。bulbモードの場合のみ有効）。
-* **options**: `key=value` 形式で、`config.json` の設定項目を一時的に上書きします。
+* **options**: `key=value` 形式で、`config.json` の設定項目を一時的に上書きします。パスを指定する場合、`~/` はホームディレクトリとして自動的に展開されます。
 
 ### 設定値とエイリアス一覧
 
@@ -121,7 +105,7 @@ python3 shutterpro03.py [shots] [mode] [exposure_sec] [options...]
 | | **optics** | `opt=` / `optics=` | **[画角変化記録]** レデューサー等の使用をトレース。 |
 | | **filter** | `fil=` / `filter=` | **[波長特性記録]** 使用フィルターを記録し、カラーバランス調整の参考に。 |
 | **System** | **log_dest** | `log_dest=` | **[保存先制御]** `s2cur` (実行場所) か `s2save` (画像保存先) か。 |
-| | **dir** | `dir=` | **[画像保存先]** FlashAir等から画像を取得しローカルに保存するディレクトリ。 |
+| | **dir** | `dir=` | **[画像保存先]** FlashAir等から画像を取得しローカルに保存するディレクトリ。`~/` (ホームディレクトリ) の展開に対応しています。 |
 | **INDI** | **INDI_MOUNT** | `mnt=` / `mount=` | **[マウント特定]** RA/Dec座標を取得する赤道儀のデバイス名（INDI）。 |
 | | **INDI_WEATHER** | `wth=` / `weather=` | **[気象センサー特定]** 気温・気圧等を取得するデバイス名（INDI）。 |
 
@@ -204,6 +188,27 @@ graph TD
 ---
 
 ## 📝 更新履歴
+
+### v15.0.7 (2026-09-21)
+* **Raspberry Pi 5 (Bookworm) でシャッターが切れない問題を修正 (shutterpro03.py)**:
+  
+  **問題**: Raspberry Pi 5 の最新カーネル（Bookworm 2026年9月時点）では、40ピンヘッダを管理する RP1 チップの `/dev/gpiochip` 番号が起動ごとに動的に割り当てられます（例: `/dev/gpiochip15`）。従来使用していた `gpiozero` ライブラリの `LGPIOFactory` は、Pi 5 のチップ番号を `chip=4`（初期カーネル）または `chip=0`（Pi 4以前）に固定して探索するため、動的に採番された RP1 チップを発見できず、サイレントに `DummyLED`（何もしないスタブ）にフォールバックしていました。その結果、ソフトウェア上はエラーなく動作しているように見えるにもかかわらず、物理ピンには一切電圧が出力されず、シャッターが切れない状態になっていました。
+
+  **原因の詳細**: `gpiodetect` コマンドで確認したところ、RP1 チップ（`pinctrl-rp1`、54ライン）は `/dev/gpiochip15` に割り当てられていましたが、`gpiozero` は `/dev/gpiochip4` を探しに行き失敗。さらに全チップを総当たりで試行した際も、内部の `PiBoardInfo` 初期化処理との競合により初期化に失敗していました。
+
+  **修正内容**: GPIO バックエンドを `gpiozero` 経由ではなく **`lgpio` を直接使用する方式** に変更しました。依存パッケージの変更はありません（`lgpio` は `requirements.txt` に既存）。
+
+  * **`_find_rp1_chip()`**: RP1 チップの動的チップ番号を自動検出する関数を新設。以下の3段階で検出します:
+    1. `/sys/bus/gpio/devices/gpiochipN/label` をスキャンし、`pinctrl-rp1` ラベルを持つチップを探索
+    2. `gpiodetect` コマンドの出力をパースして RP1 チップを特定
+    3. 静的フォールバック（`/dev/gpiochip4` → `/dev/gpiochip0`）
+  * **`LgpioShutter`**: `lgpio` ライブラリを直接使用する GPIO 出力ドライバクラスを新設。`.on()` / `.off()` / `.is_lit` / `.close()` のインターフェースは従来の `gpiozero.LED` と互換。
+  * **`init_shutter()`**: 初期化フロー全体を刷新。RP1 自動検出 → 全チップ総当たり → `DummyLED` の3段階フォールバック。
+
+  ```
+  変更前: gpiozero.LED + LGPIOFactory(chip=4固定) → 失敗 → DummyLED（信号出ず）
+  変更後: lgpio直接 + _find_rp1_chip(動的検出) → 全チップ試行 → DummyLED
+  ```
 
 ### v15.0.6 (2026-06-28)
 * **OrionFieldStack JSON Spec v1.6.3 準拠**:

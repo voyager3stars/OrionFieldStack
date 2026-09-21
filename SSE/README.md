@@ -48,13 +48,10 @@ sudo apt install astrometry-data-4208-4219 astrometry-data-4207
 
 
 ## 📖 Python環境構築
-システムパッケージを引用しつつ、仮想環境を構築します。
-```bash
-python3 -m venv --system-site-packages venv
-source venv/bin/activate
-pip install -r requirements.txt
-```
-**Note:** 依存ライブラリとして `rawpy`, `imageio`が導入されます。
+本モジュールの依存パッケージは、プロジェクトルートの `requirements.txt` で一括管理されています。
+セットアップ方法は [プロジェクトルートの README](../README.md) を参照してください。
+
+**Note:** 主な依存ライブラリ: `rawpy`, `imageio`
 
 ## 🚀 Usage
 

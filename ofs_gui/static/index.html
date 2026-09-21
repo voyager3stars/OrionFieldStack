@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>OrionFieldStack Control Panel</title>
-    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="style.css?v=1.1">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=JetBrains+Mono&display=swap"
         rel="stylesheet">
 </head>
@@ -14,7 +14,7 @@
     <div class="container">
         <header>
             <div class="header-main">
-                <h1>OrionFieldStack <span class="v-tag">v1.5.0</span></h1>
+                <h1>OrionFieldStack <span class="v-tag">v1.5.3</span></h1>
                 <nav class="tabs">
                     <button class="tab-btn active" data-tab="shutter">SHUTTER</button>
                     <button class="tab-btn" data-tab="logdata">LOGDATA</button>
@@ -52,7 +52,7 @@
                                     </div>
                                     <div class="form-group">
                                         <label for="objective">Objective</label>
-                                        <input type="text" id="objective" name="objective" value="M42 Orion Nebula">
+                                        <input type="text" id="objective" name="objective" placeholder="e.g. M42 Orion Nebula">
                                     </div>
                                     <div class="form-group">
                                         <label for="frame_type_select">Frame Type</label>
@@ -212,6 +212,35 @@
                                     </div>
                                 </div>
 
+                                <!-- Environment -->
+                                <div class="telemetry-col">
+                                    <div class="telemetry-section-title">Environment</div>
+                                    <div class="telemetry-row">
+                                        <span class="telemetry-label">Temp</span>
+                                        <span id="tel-env-temp" class="telemetry-val monospace">--</span>
+                                    </div>
+                                    <div class="telemetry-row">
+                                        <span class="telemetry-label">Humid</span>
+                                        <span id="tel-env-hum" class="telemetry-val monospace">--</span>
+                                    </div>
+                                    <div class="telemetry-row">
+                                        <span class="telemetry-label">Press</span>
+                                        <span id="tel-env-press" class="telemetry-val monospace">--</span>
+                                    </div>
+                                    <div class="telemetry-row">
+                                        <span class="telemetry-label">Dew P</span>
+                                        <span id="tel-env-dew" class="telemetry-val monospace">--</span>
+                                    </div>
+                                    <div class="telemetry-row">
+                                        <span class="telemetry-label">CPU(M)</span>
+                                        <span id="tel-env-cpu-m" class="telemetry-val monospace">--</span>
+                                    </div>
+                                    <div class="telemetry-row">
+                                        <span class="telemetry-label">CPU(R)</span>
+                                        <span id="tel-env-cpu-r" class="telemetry-val monospace">--</span>
+                                    </div>
+                                </div>
+
                                 <!-- FlashAir -->
                                 <div class="telemetry-col">
                                     <div class="telemetry-section-title">FlashAir</div>
@@ -352,6 +381,22 @@
                                         <input type="checkbox" id="sf-plot" checked>
                                         Plot (Hist)
                                     </label>
+                                    <label class="checkbox-container">
+                                        <input type="checkbox" id="sf-save-bg" checked>
+                                        Save BG
+                                    </label>
+                                </div>
+                                <div class="form-group-compact" style="margin-top: 5px; margin-bottom: 5px;">
+                                    <label for="sf-bg-format">BG Format</label>
+                                    <select id="sf-bg-format" style="padding: 4px 8px; font-size: 0.75rem; background: rgba(0,0,0,0.3); border: 1px solid var(--glass-border); color: white; border-radius: 4px; width: 100%;">
+                                        <option value="npz" selected>npz (Recommended)</option>
+                                        <option value="fit">fit</option>
+                                    </select>
+                                </div>
+                                <div class="form-group-compact" style="margin-bottom: 10px;">
+                                    <label for="sf-outpath">BG Save Path (Optional)</label>
+                                    <input type="text" id="sf-outpath" placeholder="Leave empty for original dir"
+                                        style="padding: 4px 8px; font-size: 0.75rem; background: rgba(0,0,0,0.3); border: 1px solid var(--glass-border); color: white; border-radius: 4px; width: 100%;">
                                 </div>
                                 <div class="sse-actions">
                                     <button type="button" id="sf-run-btn" class="btn-primary-small">RUN
@@ -612,6 +657,21 @@
                                                 style="flex: 1; overflow-y: auto;">
                                                 <div class="placeholder">Select flat folder to load sessions</div>
                                             </div>
+                                        </div>
+                                    </div>
+                                    <div style="display: flex; gap: 8px;">
+                                        <div style="display: flex; flex-direction: column; flex: 1;">
+                                            <label for="sfg-flat-mult-mode" style="font-size: 0.7rem; color: var(--text-dim); margin-bottom: 4px;">Multiplier Mode</label>
+                                            <select id="sfg-flat-mult-mode" name="flat_mult_mode" style="padding: 4px; font-size: 0.75rem; background: rgba(0,0,0,0.3); border: 1px solid var(--glass-border); color: white; border-radius: 4px;">
+                                                <option value="none">None</option>
+                                                <option value="manual">Manual</option>
+                                                <option value="auto_ccr">Auto CCR</option>
+                                                <option value="auto_fit">Auto Fit</option>
+                                            </select>
+                                        </div>
+                                        <div style="display: flex; flex-direction: column; flex: 1;">
+                                            <label for="sfg-flat-mult-value" style="font-size: 0.7rem; color: var(--text-dim); margin-bottom: 4px;">Value (manual)</label>
+                                            <input type="number" id="sfg-flat-mult-value" name="flat_mult_value" value="1.0" step="0.01" style="padding: 4px; font-size: 0.75rem; background: rgba(0,0,0,0.3); border: 1px solid var(--glass-border); color: white; border-radius: 4px;" disabled>
                                         </div>
                                     </div>
                                 </div>
@@ -901,6 +961,35 @@
                                     </div>
                                 </div>
 
+                                <!-- Environment -->
+                                <div class="telemetry-col">
+                                    <div class="telemetry-section-title">Environment</div>
+                                    <div class="telemetry-row">
+                                        <span class="telemetry-label">Temp</span>
+                                        <span id="sync-tel-env-temp" class="telemetry-val monospace">--</span>
+                                    </div>
+                                    <div class="telemetry-row">
+                                        <span class="telemetry-label">Humid</span>
+                                        <span id="sync-tel-env-hum" class="telemetry-val monospace">--</span>
+                                    </div>
+                                    <div class="telemetry-row">
+                                        <span class="telemetry-label">Press</span>
+                                        <span id="sync-tel-env-press" class="telemetry-val monospace">--</span>
+                                    </div>
+                                    <div class="telemetry-row">
+                                        <span class="telemetry-label">Dew P</span>
+                                        <span id="sync-tel-env-dew" class="telemetry-val monospace">--</span>
+                                    </div>
+                                    <div class="telemetry-row">
+                                        <span class="telemetry-label">CPU(M)</span>
+                                        <span id="sync-tel-env-cpu-m" class="telemetry-val monospace">--</span>
+                                    </div>
+                                    <div class="telemetry-row">
+                                        <span class="telemetry-label">CPU(R)</span>
+                                        <span id="sync-tel-env-cpu-r" class="telemetry-val monospace">--</span>
+                                    </div>
+                                </div>
+
                                 <!-- FlashAir -->
                                 <div class="telemetry-col">
                                     <div class="telemetry-section-title">FlashAir</div>
@@ -1041,7 +1130,7 @@
         </div>
     </div>
 
-    <script src="script.js"></script>
+    <script src="script.js?v=1.1"></script>
 </body>
 
 </html>

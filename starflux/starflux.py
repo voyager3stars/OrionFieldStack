@@ -20,9 +20,13 @@ import rawpy
 from astropy.io import fits
 from astropy.stats import sigma_clipped_stats
 from photutils.detection import DAOStarFinder
-from photutils.background import Background2D, MedianBackground
+from photutils.background import Background2D, MedianBackground, BkgZoomInterpolator
+from astropy.modeling import models, fitting
+import warnings
+from astropy.utils.exceptions import AstropyDeprecationWarning
+warnings.simplefilter('ignore', category=AstropyDeprecationWarning)
 
-__version__ = "1.3.3"
+__version__ = "1.3.4"
 
 def load_image(file_path):
     """
@@ -352,6 +356,46 @@ def check_if_already_processed(img_path, force_mode):
         pass
     return False
 
+def calculate_smooth_background(data, box_size=(128, 128)):
+    """
+    ハイブリッド背景モデリングを用いて、端まで滑らかな背景画像を生成する。
+    1. Global Fit: 2次多項式（周辺減光ドーム近似）
+    2. Local Fit: スプライン補間による残差モデリング
+    """
+    # 1. Global Fit (2次多項式)
+    # まず大まかにBackground2Dで星を除去し、代表値メッシュを取得
+    bkg_coarse = Background2D(data, box_size, filter_size=(3, 3), bkg_estimator=MedianBackground())
+    mesh = bkg_coarse.background_mesh
+    
+    # Background2Dのメッシュ座標（Y, Xの中心座標）を取得
+    # _calculate_mesh_yxcen()はマスクされたメッシュを省いてしまうため、形状が合わなくなるのを防ぐ
+    ny, nx = mesh.shape
+    box_y, box_x = bkg_coarse.box_size
+    y_cen = np.arange(ny) * box_y + (box_y - 1) / 2.0
+    x_cen = np.arange(nx) * box_x + (box_x - 1) / 2.0
+    mesh_x, mesh_y = np.meshgrid(x_cen, y_cen)
+    
+    # 2次多項式のフィッティング
+    p_init = models.Polynomial2D(degree=2)
+    fit_p = fitting.LinearLSQFitter()
+    
+    # フィッティング実行（念のためNaNを除外）
+    valid = ~np.isnan(mesh.flatten())
+    p_fit = fit_p(p_init, mesh_x.flatten()[valid], mesh_y.flatten()[valid], mesh.flatten()[valid])
+    
+    # 画像全体に多項式モデルを適用
+    y_full, x_full = np.mgrid[:data.shape[0], :data.shape[1]]
+    bg_global = p_fit(x_full, y_full)
+    
+    # 2. Local Fit (残差へのスプライン補間)
+    residual = data - bg_global
+    bkg_residual = Background2D(residual, box_size, filter_size=(3, 3), bkg_estimator=MedianBackground())
+    
+    # 3. 最終的な背景を合成
+    bg_final = bg_global + bkg_residual.background
+    
+    return bg_final
+
 def process_file(img_path, args):
     """
     1つのファイルを処理する
@@ -369,9 +413,9 @@ def process_file(img_path, args):
         mean_val, median_val, std_val = sigma_clipped_stats(data, sigma=3.0)
         
         try:
-            bkg = Background2D(data, (128, 128), filter_size=(3, 3), bkg_estimator=MedianBackground())
-            bkg_image = bkg.background
-            bg_median = float(bkg.background_median)
+            # ハイブリッド背景モデリングを用いて端まで滑らかな背景を生成する
+            bkg_image = calculate_smooth_background(data, box_size=(128, 128))
+            bg_median = float(np.median(bkg_image))
         except Exception as e:
             print(f"  [Warning] Background2D failed, using flat background: {e}")
             bkg_image = np.full_like(data, median_val)
@@ -382,16 +426,24 @@ def process_file(img_path, args):
         bg_image_info = None
         if getattr(args, 'save_bg_image', False):
             base_name = os.path.splitext(img_name)[0]
-            bg_filename = f"{base_name}_bg_image.fit"
+            fmt = getattr(args, 'bg_format', 'fit')
+            bg_filename = f"{base_name}_bg_image.{fmt}"
             
             if getattr(args, 'outpath', None):
-                out_dir = os.path.abspath(args.outpath)
+                out_dir = os.path.abspath(os.path.expanduser(args.outpath))
             else:
                 out_dir = os.path.dirname(os.path.abspath(img_path))
                 
             os.makedirs(out_dir, exist_ok=True)
             bg_path = os.path.join(out_dir, bg_filename)
-            fits.writeto(bg_path, bkg_image, overwrite=True)
+            
+            if fmt == 'npz':
+                # 1/4にダウンサンプリングし、float16に変換して保存
+                bkg_small = bkg_image[::4, ::4].astype(np.float16)
+                np.savez_compressed(bg_path, bg=bkg_small)
+            else:
+                fits.writeto(bg_path, bkg_image, overwrite=True)
+                
             print(f"  [Info] Saved background image to {bg_path}")
             
             bg_image_info = {
@@ -478,7 +530,8 @@ def main():
     parser.add_argument("--box-size", type=int, default=15, help="Cutout size")
     parser.add_argument("--snr", type=float, default=5.0, help="SNR threshold")
     parser.add_argument("--session", help="Filter by Session ID")
-    parser.add_argument("--save-bg-image", action="store_true", help="Save background-only image as FITS")
+    parser.add_argument("--save-bg-image", action="store_true", help="Save background-only image")
+    parser.add_argument("--bg-format", choices=["fit", "npz"], default="fit", help="Format to save the background image")
     parser.add_argument("-outpath", "--outpath", help="Directory path to save the background image")
     args = parser.parse_args()
 

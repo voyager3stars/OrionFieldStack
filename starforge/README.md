@@ -19,12 +19,8 @@ StarForgeは以下のライブラリを使用します。
 - `scipy`, `scikit-image`: 画像処理およびスタック演算アルゴリズム
 
 ### セットアップ手順
-```bash
-cd OrionFieldStack/starforge
-python3 -m venv --system-site-packages venv
-source venv/bin/activate
-pip install -r requirements.txt
-```
+本モジュールの依存パッケージは、プロジェクトルートの `requirements.txt` で一括管理されています。
+セットアップ方法は [プロジェクトルートの README](../README.md) を参照してください。
 
 ---
 
@@ -39,10 +35,15 @@ pip install -r requirements.txt
     "mode": "mono",
     "out": "AUTO",
     "out_dir": "./output",
+    "limit": null,
     "use_flat": false,
     "flat_dir": "~/Pictures/flat",
+    "flat_session": null,
+    "flat_mult_mode": "none",
+    "flat_mult_value": 1.0,
     "use_dark": false,
-    "dark_dir": "~/Pictures/dark"
+    "dark_dir": "~/Pictures/dark",
+    "dark_session": null
 }
 ```
 ※コマンドライン引数は、この設定ファイルの内容を常に上書き（オーバーライド）します。
@@ -71,10 +72,15 @@ pip install -r requirements.txt
 | `--threshold` | `0.2` | スタック対象とする楕円率の最大しきい値。 |
 | `--session` | - | 指定した Session ID(s) の画像のみを抽出。 |
 | `--obj` | - | 指定した Objective 名(s) の画像のみを抽出。 |
+| `--limit` | - | スタック処理する画像の最大枚数。 |
 | `--flat` / `--no-flat` | `OFF` | フラット補正の有効/無効を指定。 |
 | `--dark` / `--no-dark` | `OFF` | ダーク減算の有効/無効を指定。 |
 | `--flat_dir` | - | フラット画像群が含まれるディレクトリ。 |
+| `--flat_session` | - | フラット補正に使用するSession IDを強制指定。 |
+| `--flat-mult-mode`| `none` | フラット補正の乗数モード (`none`, `manual`, `auto_ccr`, `auto_fit`)。 |
+| `--flat-mult-value`| `1.0` | `manual` モード選択時のフラット乗数値。 |
 | `--dark_dir` | - | ダーク画像群が含まれるディレクトリ。 |
+| `--dark_session` | - | ダーク減算に使用するSession IDを強制指定。 |
 | `--method` | `sigma_clip` | スタッキング手法 (`median`, `mean`, `sigma_clip`)。 |
 | `--out` | `AUTO` | 出力ファイル名。`AUTO` でセッション情報から動的生成。 |
 | `--out_dir` | `.` | FITSファイルおよびレポートの出力先ディレクトリ。 |

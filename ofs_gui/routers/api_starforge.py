@@ -32,6 +32,8 @@ async def start_starforge(request: Request):
         no_flat = form_data.get("use_flat") == "false"
         flat_dir = form_data.get("flat_dir")
         flat_session = form_data.get("flat_session")
+        flat_mult_mode = form_data.get("flat_mult_mode")
+        flat_mult_value = form_data.get("flat_mult_value")
         use_dark = form_data.get("use_dark") == "true"
         no_dark = form_data.get("use_dark") == "false"
         dark_dir = form_data.get("dark_dir")
@@ -66,6 +68,10 @@ async def start_starforge(request: Request):
             cmd.extend(["--flat_dir", os.path.abspath(os.path.expanduser(flat_dir))])
         if flat_session:
             cmd.extend(["--flat_session", flat_session])
+        if flat_mult_mode:
+            cmd.extend(["--flat-mult-mode", flat_mult_mode])
+        if flat_mult_value:
+            cmd.extend(["--flat-mult-value", flat_mult_value])
         if dark_dir:
             cmd.extend(["--dark_dir", os.path.abspath(os.path.expanduser(dark_dir))])
         if dark_session:

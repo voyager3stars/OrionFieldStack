@@ -30,11 +30,8 @@ ExifScribeは、撮影されたDNGファイルからEXIF情報を抽出し、`sh
 
 ## 🛰 Installation
 
-実行には `exifread` ライブラリが必要です。
-
-```bash
-pip install exifread
-```
+本モジュールの依存パッケージ（`exifread`）は、プロジェクトルートの `requirements.txt` で一括管理されています。
+セットアップ方法は [プロジェクトルートの README](../README.md) を参照してください。
 
 ---
 

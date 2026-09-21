@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OrionFieldStack Map Viewer</title>
+    
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+     integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+     crossorigin=""/>
+     
+    <!-- Leaflet.draw CSS -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css" />
+
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+
+    <div id="map"></div>
+
+    <div class="overlay-panel">
+        <h3>Telemetries</h3>
+        <div class="info-row">
+            <span class="info-label">GPS Status:</span>
+            <span class="info-value" id="gps-status">Connecting...</span>
+        </div>
+        <div class="info-row">
+            <span class="info-label">Latitude:</span>
+            <span class="info-value" id="lat">---</span>
+        </div>
+        <div class="info-row">
+            <span class="info-label">Longitude:</span>
+            <span class="info-value" id="lon">---</span>
+        </div>
+        <div class="info-row">
+            <span class="info-label">Zoom Level:</span>
+            <span class="info-value" id="zoom-level">5</span>
+        </div>
+        
+        <a href="/admin" class="admin-link">⚙️ Map Area Manager</a>
+        <button id="download-btn" class="download-btn">📥 Download Map Data</button>
+    </div>
+
+    <!-- Modal for Download Options -->
+    <div id="download-modal" class="modal">
+        <div class="modal-content">
+            <span class="close-btn" id="close-modal">&times;</span>
+            <h2>Download Current Area</h2>
+            <p>Select the maximum zoom level to download for the current screen area (Zoom 7 to Max).</p>
+            
+            <div style="margin-top: 15px; margin-bottom: 15px;">
+                <label for="max-zoom-select" style="font-weight: bold;">Max Zoom Level: <span id="zoom-val-display">12</span></label>
+                <input type="range" id="max-zoom-select" min="7" max="19" value="12" style="width: 100%; margin-top: 10px;">
+                <div style="display: flex; justify-content: space-between; font-size: 12px; color: #aaa;">
+                    <span>7 (Wide)</span>
+                    <span>14 (Medium)</span>
+                    <span>19 (Detailed)</span>
+                </div>
+            </div>
+            
+            <div id="estimate-container" style="background: rgba(0,0,0,0.2); padding: 10px; border-radius: 4px; margin-bottom: 15px;">
+                <p style="margin: 0; font-size: 14px; color: #ddd;">Estimating...</p>
+            </div>
+
+            <div class="download-options">
+                <button id="start-download-btn" class="btn-primary" disabled>Start Download</button>
+                <button id="cancel-download-btn" class="btn-secondary" style="display:none; background-color: #F44336;">Cancel Download</button>
+            </div>
+            <p id="download-status" style="margin-top: 10px; color: #FFC107;"></p>
+        </div>
+    </div>
+
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+     integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+     crossorigin=""></script>
+     
+    <!-- Leaflet.draw JS -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
+     
+    <script src="/static/js/map.js?v=3"></script>
+</body>
+</html>

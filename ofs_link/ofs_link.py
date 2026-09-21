@@ -8,12 +8,31 @@ import time
 import select
 import urllib.request
 import urllib.error
+import math
 from datetime import datetime, timezone
 from timezonefinder import TimezoneFinder
 import pytz
 
 # TimezoneFinderをグローバルに初期化
 tf = TimezoneFinder()
+
+def safe_float(val, round_digits=None):
+    """
+    値を安全に float に変換する。
+    None, NaN, Inf, または変換不能な文字列の場合は None を返す。
+    round_digits が指定されている場合は四捨五入する。
+    """
+    if val is None:
+        return None
+    try:
+        f = float(val)
+        if not math.isfinite(f):
+            return None
+        if round_digits is not None:
+            return round(f, round_digits)
+        return f
+    except (ValueError, TypeError):
+        return None
 
 def parse_sexagesimal(val):
     """
@@ -23,17 +42,28 @@ def parse_sexagesimal(val):
         return None
     try:
         if isinstance(val, (int, float)):
-            return float(val)
-        parts = str(val).split(':')
+            f = float(val)
+            return f if math.isfinite(f) else None
+        
+        s = str(val).strip()
+        if s.lower() in ("nan", "inf", "-inf", "+inf"):
+            return None
+            
+        parts = s.split(':')
         if len(parts) < 2:
-            return float(val)
+            f = float(s)
+            return f if math.isfinite(f) else None
         
         d = float(parts[0])
         m = float(parts[1])
-        s = float(parts[2]) if len(parts) > 2 else 0.0
+        sec = float(parts[2]) if len(parts) > 2 else 0.0
         
+        if not (math.isfinite(d) and math.isfinite(m) and math.isfinite(sec)):
+            return None
+            
         sign = -1 if d < 0 or parts[0].startswith('-') else 1
-        return d + (sign * m / 60.0) + (sign * s / 3600.0)
+        res = d + (sign * m / 60.0) + (sign * sec / 3600.0)
+        return res if math.isfinite(res) else None
     except:
         return None
 
@@ -41,6 +71,8 @@ def calc_lst(longitude, dt_utc):
     """
     経度とUTC時間から地方恒星時(LST)を計算する (decimal hours)
     """
+    if longitude is None or not math.isfinite(longitude):
+        return None
     try:
         timestamp = dt_utc.timestamp()
         jd = (timestamp / 86400.0) + 2440587.5
@@ -56,7 +88,7 @@ def format_ra(ra_deg):
     """
     RA (度数, 0 ~ 360) を 'XXhXXmXXs' 形式の文字列に変換する。
     """
-    if ra_deg is None:
+    if ra_deg is None or not math.isfinite(ra_deg):
         return None
     ra_deg = ra_deg % 360.0
     ra_hours = ra_deg / 15.0
@@ -75,7 +107,7 @@ def format_dec(dec_deg):
     DEC (度数, -90 ~ 90) を 'XX°XX'XX"' 形式の文字列に変換する。
     符号は、正の場合は '+'、負の場合は '-' を明示する。
     """
-    if dec_deg is None:
+    if dec_deg is None or not math.isfinite(dec_deg):
         return None
     dec_deg = max(-90.0, min(90.0, dec_deg))
     
@@ -144,12 +176,9 @@ def load_config(config_path_arg=None):
                     
                     for k in config.keys():
                         if k in target_dict:
-                            # 数値型に変換できるものは変換する
                             if k in ["LAST_LATITUDE", "LAST_LONGITUDE", "LAST_ELEVATION"]:
-                                try:
-                                    config[k] = float(target_dict[k])
-                                except:
-                                    config[k] = target_dict[k]
+                                sf = safe_float(target_dict[k])
+                                config[k] = sf if sf is not None else target_dict[k]
                             else:
                                 config[k] = target_dict[k]
                 break
@@ -273,7 +302,13 @@ def main():
             "longitude": 135.0015,
             "elevation": 54.0,
             "timestamp_utc": "2026-06-21T06:55:01.000Z",
-            "iso_timestamp": "2026-06-21T15:55:01.000+09:00"
+            "iso_timestamp": "2026-06-21T15:55:01.000+09:00",
+            "temp_c": 25.9,
+            "humidity_pct": 55.6,
+            "pressure_hPa": 1010.0,
+            "dew_point_c": 17.0,
+            "cpu_temp_mount_c": 38.0,
+            "cpu_temp_rpi_c": 45.2
         }
         print(json.dumps(mock_data, indent=2))
         sys.exit(0)
@@ -293,9 +328,9 @@ def main():
     dt_utc = None
     
     if gps_tpv:
-        latitude = gps_tpv.get("lat")
-        longitude = gps_tpv.get("lon")
-        elevation = gps_tpv.get("altHAE") or gps_tpv.get("alt") or gps_tpv.get("altMSL")
+        latitude = safe_float(gps_tpv.get("lat"))
+        longitude = safe_float(gps_tpv.get("lon"))
+        elevation = safe_float(gps_tpv.get("altHAE") or gps_tpv.get("alt") or gps_tpv.get("altMSL"))
         
         # GPSDからの時間情報のパース
         time_str = gps_tpv.get("time")
@@ -308,11 +343,11 @@ def main():
  
     # GPSから位置情報が取得できない場合は設定ファイルのデフォルト値（前回値）にフォールバック
     if latitude is None or longitude is None:
-        latitude = config.get("LAST_LATITUDE")
-        longitude = config.get("LAST_LONGITUDE")
+        latitude = safe_float(config.get("LAST_LATITUDE"))
+        longitude = safe_float(config.get("LAST_LONGITUDE"))
         
     if elevation is None:
-        elevation = config.get("LAST_ELEVATION")
+        elevation = safe_float(config.get("LAST_ELEVATION"))
         
     # 時間情報が取得できない場合はシステム現在時間（UTC）を使用
     if dt_utc is None:
@@ -340,6 +375,19 @@ def main():
     ra_deg = None
     dec_deg = None
     pier_side = "UNKNOWN"
+    temp_c = None
+    humidity_pct = None
+    pressure_hPa = None
+    dew_point_c = None
+    cpu_temp_mount_c = None
+    cpu_temp_rpi_c = None
+    
+    # Raspberry Pi CPU温度の取得
+    try:
+        with open("/sys/class/thermal/thermal_zone0/temp", "r") as f:
+            cpu_temp_rpi_c = safe_float(float(f.read().strip()) / 1000.0, 1)
+    except:
+        pass
     
     if is_connected:
         indi_server = "CONNECTED"
@@ -365,12 +413,12 @@ def main():
         if ra_raw:
             ra_val = parse_sexagesimal(ra_raw)
             if ra_val is not None:
-                ra_deg = round(ra_val * 15.0, 8)
+                ra_deg = safe_float(ra_val * 15.0, 8)
                 
         if dec_raw:
             dec_val = parse_sexagesimal(dec_raw)
             if dec_val is not None:
-                dec_deg = round(dec_val, 8)
+                dec_deg = safe_float(dec_val, 8)
                 
         # ピアーサイドの取得
         pier_side_raw = get_prop(mount_dev, "SIDE_OF_PIER", "PIER_SIDE") or \
@@ -396,23 +444,45 @@ def main():
                 except:
                     pass
 
+        # 環境情報の取得 (WEATHER_PARAMETERS)
+        t_raw = get_prop(mount_dev, "WEATHER_PARAMETERS", "WEATHER_TEMPERATURE")
+        temp_c = safe_float(t_raw, 1)
+            
+        h_raw = get_prop(mount_dev, "WEATHER_PARAMETERS", "WEATHER_HUMIDITY")
+        humidity_pct = safe_float(h_raw, 1)
+            
+        p_raw = get_prop(mount_dev, "WEATHER_PARAMETERS", "WEATHER_BAROMETER")
+        pressure_hPa = safe_float(p_raw, 1)
+            
+        d_raw = get_prop(mount_dev, "WEATHER_PARAMETERS", "WEATHER_DEWPOINT")
+        dew_point_c = safe_float(d_raw, 1)
+            
+        c_raw = get_prop(mount_dev, "WEATHER_PARAMETERS", "WEATHER_CPU_TEMPERATURE")
+        cpu_temp_mount_c = safe_float(c_raw, 1)
+
     # 結果データの組み立て
     result_data = {
         "indi_server": indi_server,
         "status": status,
-        "ra_deg": ra_deg,
-        "dec_deg": dec_deg,
+        "ra_deg": safe_float(ra_deg, 8),
+        "dec_deg": safe_float(dec_deg, 8),
         "ra_str": format_ra(ra_deg),
         "dec_str": format_dec(dec_deg),
         "side_of_pier": pier_side,
-        "latitude": round(latitude, 6) if latitude is not None else None,
-        "longitude": round(longitude, 6) if longitude is not None else None,
-        "elevation": round(elevation, 1) if elevation is not None else None,
+        "latitude": safe_float(latitude, 6),
+        "longitude": safe_float(longitude, 6),
+        "elevation": safe_float(elevation, 1),
         "timestamp_utc": timestamp_utc,
-        "iso_timestamp": iso_timestamp
+        "iso_timestamp": iso_timestamp,
+        "temp_c": temp_c,
+        "humidity_pct": humidity_pct,
+        "pressure_hPa": pressure_hPa,
+        "dew_point_c": dew_point_c,
+        "cpu_temp_mount_c": cpu_temp_mount_c,
+        "cpu_temp_rpi_c": cpu_temp_rpi_c
     }
     
-    print(json.dumps(result_data, indent=2))
+    print(json.dumps(result_data, indent=2, allow_nan=False))
 
 if __name__ == "__main__":
     main()

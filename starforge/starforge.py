@@ -84,6 +84,8 @@ def load_config():
         "flat_dir": None,
         "flat_session": None,
         "use_flat": True,
+        "flat_mult_mode": "none",
+        "flat_mult_value": 1.0,
         "dark_dir": None,
         "dark_session": None,
         "use_dark": True,
@@ -117,9 +119,58 @@ def get_nested_val(data, keys, default=None):
     return data if data is not None else default
 
 
-def apply_flat(img_data, flat_data, color):
+def calculate_convexity_metrics(convex_data):
+    ccr_pct = 0.0
+    curv_val = 0.0
+    if convex_data.size > 1:
+        ch_c, cw_c = convex_data.shape
+        cy_c, cx_c = ch_c // 2, cw_c // 2
+        dy, dx = max(1, ch_c // 10), max(1, cw_c // 10)
+        
+        center_region = convex_data[cy_c-dy:cy_c+dy, cx_c-dx:cx_c+dx]
+        corner_tl = convex_data[dy:3*dy, dx:3*dx]
+        corner_tr = convex_data[dy:3*dy, -3*dx:-dx]
+        corner_bl = convex_data[-3*dy:-dy, dx:3*dx]
+        corner_br = convex_data[-3*dy:-dy, -3*dx:-dx]
+        
+        center_med = np.median(center_region) if center_region.size > 0 else 0
+        corners = np.concatenate([corner_tl.flatten(), corner_tr.flatten(), corner_bl.flatten(), corner_br.flatten()])
+        corner_med = np.median(corners) if corners.size > 0 else 0
+        
+        if corner_med > 0:
+            ccr_pct = (center_med - corner_med) / corner_med * 100.0
+            
+        h_s, w_s = convex_data.shape
+        grid_h_s, grid_w_s = h_s / 16.0, w_s / 16.0
+        x_pts, y_pts, z_pts = [], [], []
+        for i in range(16):
+            for j in range(16):
+                r_s = int(i * grid_h_s)
+                r_e = int((i+1)*grid_h_s) if i < 15 else h_s
+                c_s = int(j * grid_w_s)
+                c_e = int((j+1)*grid_w_s) if j < 15 else w_s
+                reg = convex_data[r_s:r_e, c_s:c_e]
+                if reg.size > 0:
+                    y_pts.append(i - 7.5)
+                    x_pts.append(j - 7.5)
+                    z_pts.append(np.median(reg))
+        
+        if len(z_pts) > 0:
+            x_pts, y_pts, z_pts = np.array(x_pts), np.array(y_pts), np.array(z_pts)
+            A_mat = np.c_[x_pts**2, y_pts**2, x_pts, y_pts, np.ones_like(x_pts)]
+            try:
+                coeffs, _, _, _ = np.linalg.lstsq(A_mat, z_pts, rcond=None)
+                A, B = coeffs[0], coeffs[1]
+                z_mean = np.mean(z_pts)
+                if z_mean > 0:
+                    curv_val = -(A + B) * 56.25 / z_mean * 100.0
+            except:
+                pass
+    return ccr_pct, curv_val
+
+def apply_flat(img_data, flat_data, color, mult_mode="none", mult_value=1.0, bg_data=None):
     """
-    Applies flat field correction to an image.
+    Applies flat field correction to an image with an optional multiplier.
     img_data and flat_data should be numpy arrays of the same shape.
     """
     # Resize or crop flat_data if shapes don't exactly match (simple check)
@@ -143,11 +194,47 @@ def apply_flat(img_data, flat_data, color):
         else:
             flat_normalized = np.ones_like(flat_data)
             
-    # Apply correction: Light / Normalized_Flat
+    # Calculate optimal multiplier if auto mode
+    applied_mult = 1.0
+    if mult_mode == "manual":
+        applied_mult = mult_value
+    elif mult_mode in ["auto_ccr", "auto_fit"]:
+        if bg_data is not None:
+            import scipy.ndimage
+            import scipy.optimize
+            
+            flat_gray = np.mean(flat_normalized, axis=-1) if flat_normalized.ndim == 3 else flat_normalized
+            
+            zoom_y = bg_data.shape[0] / flat_gray.shape[0]
+            zoom_x = bg_data.shape[1] / flat_gray.shape[1]
+            flat_gray_down = scipy.ndimage.zoom(flat_gray.astype(float), (zoom_y, zoom_x), order=0)
+            
+            h_bg, w_bg = bg_data.shape
+            scale = max(1, round(w_bg / 160))
+            bg_down = bg_data[::scale, ::scale].astype(float)
+            flat_down = flat_gray_down[::scale, ::scale]
+            
+            def objective(m):
+                flat_safe_down = np.maximum(flat_down, 1e-5)
+                test_z = bg_down / (flat_safe_down ** m)
+                test_z = np.nan_to_num(test_z, nan=0.0, posinf=0.0, neginf=0.0)
+                ccr, fit = calculate_convexity_metrics(test_z)
+                return abs(ccr) if mult_mode == "auto_ccr" else abs(fit)
+                
+            res = scipy.optimize.minimize_scalar(objective, bounds=(0.0, 3.0), method='bounded')
+            if res.success:
+                applied_mult = float(res.x)
+            else:
+                applied_mult = 1.0
+        else:
+            # Fallback if bg_data is missing but somehow reached here
+            applied_mult = 1.0
+
+    # Apply correction: Light / (Normalized_Flat ** applied_mult)
     # Avoid zero division
     flat_safe = np.maximum(flat_normalized, 1e-5)
-    corrected = img_data / flat_safe
-    return corrected.astype(np.float32)
+    corrected = img_data / (flat_safe ** applied_mult)
+    return corrected.astype(np.float32), applied_mult
 
 def apply_dark(img_data, dark_data):
     """
@@ -286,7 +373,7 @@ def filter_by_quality(valid_files, metadata_map, criteria='sf_ell_med', threshol
                 
     return passed
 
-def get_report_data(args, initial_files, valid_files, metadata_map, dark_files_used, flat_files_used, meta_warnings, dark_cache, flat_cache):
+def get_report_data(args, initial_files, valid_files, metadata_map, dark_files_used, flat_files_used, meta_warnings, dark_cache, flat_cache, flat_mults_used=None):
     """Aggregates all metadata for report generation."""
     import datetime
     
@@ -347,10 +434,24 @@ def get_report_data(args, initial_files, valid_files, metadata_map, dark_files_u
     light_dirs = sorted(list(set([os.path.dirname(f) for f in valid_files])))
     light_sessions = sorted(list(set([metadata_map.get(f, {}).get("session_id") for f in valid_files])))
     
+    if flat_mults_used and len(flat_mults_used) > 0:
+        avg_mult = sum(flat_mults_used) / len(flat_mults_used)
+        min_mult = min(flat_mults_used)
+        max_mult = max(flat_mults_used)
+        if args.flat_mult_mode in ["auto_ccr", "auto_fit"]:
+            mult_display = f"{args.flat_mult_mode} (avg: {avg_mult:.2f}, {min_mult:.2f}-{max_mult:.2f})"
+        elif args.flat_mult_mode == "manual":
+            mult_display = f"manual ({args.flat_mult_value})"
+        else:
+            mult_display = "none (1.0)"
+    else:
+        mult_display = "N/A"
+
     file_info = {
         "light_folders": ", ".join(light_dirs),
         "light_sessions": ", ".join([str(s) for s in light_sessions if s]),
         "flat_applied": "Enabled" if args.use_flat else "Disabled",
+        "flat_multiplier": mult_display,
         "flat_folder": args.flat_dir if args.flat_dir else "N/A",
         "flat_session": args.flat_session if args.flat_session else "N/A",
         "dark_applied": "Enabled" if args.use_dark else "Disabled",
@@ -446,6 +547,7 @@ Generated on: {data["out_file"]}
 | **Light フォルダ** | {data["file_info"]["light_folders"]} |
 | **Light セッション** | {data["file_info"]["light_sessions"]} |
 | **Flat 補正 (Apply)** | {"有効 (Enabled)" if data["file_info"]["flat_applied"] == "Enabled" else "無効 (Disabled)"} |
+| **Flat Multiplier** | {data["file_info"]["flat_multiplier"]} |
 | **Flat フォルダ** | {data["file_info"]["flat_folder"]} |
 | **Flat セッション (ID)** | {data["file_info"]["flat_session"]} |
 | **Dark 補正 (Apply)** | {"有効 (Enabled)" if data["file_info"]["dark_applied"] == "Enabled" else "無効 (Disabled)"} |
@@ -522,6 +624,7 @@ Generated on: {data["out_file"]}
 | **Light Folders** | {data["file_info"]["light_folders"]} |
 | **Light Sessions (ID)** | {data["file_info"]["light_sessions"]} |
 | **Flat Field Correction** | {data["file_info"]["flat_applied"]} |
+| **Flat Multiplier** | {data["file_info"]["flat_multiplier"]} |
 | **Flat Folder** | {data["file_info"]["flat_folder"]} |
 | **Flat Session (ID)** | {data["file_info"]["flat_session"]} |
 | **Dark Field Correction** | {data["file_info"]["dark_applied"]} |
@@ -697,6 +800,7 @@ Generated on: {data["out_file"]}
         <tr><td class="label">Light Folders</td><td class="value">{data["file_info"]["light_folders"]}</td></tr>
         <tr><td class="label">Light Sessions (ID)</td><td class="value">{data["file_info"]["light_sessions"]}</td></tr>
         <tr><td class="label">Flat Field Correction (Apply)</td><td class="value">{data["file_info"]["flat_applied"]}</td></tr>
+        <tr><td class="label">Flat Multiplier</td><td class="value">{data["file_info"]["flat_multiplier"]}</td></tr>
         <tr><td class="label">Flat Folder</td><td class="value">{data["file_info"]["flat_folder"]}</td></tr>
         <tr><td class="label">Flat Session (ID)</td><td class="value">{data["file_info"]["flat_session"]}</td></tr>
         <tr><td class="label">Dark Field Correction (Apply)</td><td class="value">{data["file_info"]["dark_applied"]}</td></tr>
@@ -804,6 +908,8 @@ def main():
     parser.add_argument("--limit", type=int, default=conf["limit"], help="Limit number of frames to stack")
     parser.add_argument("--flat_dir", default=conf["flat_dir"], help="Directory containing flat images")
     parser.add_argument("--flat_session", default=conf["flat_session"], help="Force a specific session ID for flats")
+    parser.add_argument("--flat-mult-mode", choices=['none', 'manual', 'auto_ccr', 'auto_fit'], default=conf["flat_mult_mode"], help="Flat multiplier mode")
+    parser.add_argument("--flat-mult-value", type=float, default=conf["flat_mult_value"], help="Flat multiplier fixed value (for manual mode)")
     parser.add_argument("--dark_dir", default=conf["dark_dir"], help="Directory containing dark images")
     parser.add_argument("--dark_session", default=conf["dark_session"], help="Force a specific session ID for darks")
     
@@ -1009,15 +1115,35 @@ def main():
 
     def get_and_apply_flat(img, path):
         if not args.flat_dir or not args.use_flat:
-            return img
+            return img, 1.0
             
         target_s_id = args.flat_session if args.flat_session else (metadata_map.get(path, {}).get("session_id"))
-        if not target_s_id: return img
+        if not target_s_id: return img, 1.0
+
+        bg_data = None
+        if args.flat_mult_mode in ["auto_ccr", "auto_fit"]:
+            entry = metadata_map.get(path, {})
+            sf_info = entry.get("analysis", {}).get("SF", {})
+            bg_img_info = sf_info.get("bg_image", {})
+            if bg_img_info and isinstance(bg_img_info, dict):
+                b_path = bg_img_info.get("path", "")
+                b_name = bg_img_info.get("name", "")
+                if b_name:
+                    bg_full_path = os.path.join(b_path if b_path else os.path.dirname(path), b_name)
+                    if os.path.exists(bg_full_path) and bg_full_path.endswith('.npz'):
+                        try:
+                            with np.load(bg_full_path) as npz:
+                                bg_data = npz['bg']
+                        except Exception as e:
+                            print(f"  [Warning] Failed to load bg image {bg_full_path}: {e}")
+            if bg_data is None:
+                print(f"  [Skip] bg file required for {args.flat_mult_mode} is missing for {os.path.basename(path)}. Skipping frame.")
+                return None, 1.0
 
         if target_s_id in flat_cache:
             f_data, f_meta = flat_cache[target_s_id]
             for f_p, _ in flat_inventory.get(target_s_id, []): flat_files_used.add(f_p)
-            return apply_flat(img, f_data, args.color) if f_data is not None else img
+            return apply_flat(img, f_data, args.color, args.flat_mult_mode, args.flat_mult_value, bg_data) if f_data is not None else (img, 1.0)
 
         master_name = f"master_flat_{target_s_id}_{args.mode}.fits"
         master_path = os.path.join(args.flat_dir, master_name)
@@ -1052,9 +1178,10 @@ def main():
         flat_cache[target_s_id] = (f_data, f_meta)
         if f_data is not None:
             for f_p, _ in flat_inventory.get(target_s_id, []): flat_files_used.add(f_p)
-            return apply_flat(img, f_data, args.color)
-        return img
+            return apply_flat(img, f_data, args.color, args.flat_mult_mode, args.flat_mult_value, bg_data)
+        return img, 1.0
 
+    flat_mults_used = []
     with tempfile.TemporaryDirectory() as tmp_dir:
         print(f"  [Processing] Initializing stack with {len(valid_files)} frames...")
         
@@ -1062,7 +1189,11 @@ def main():
         ref_data = load_image(ref_path, color=args.color)
         # Calibration sequence for reference
         ref_data = get_and_apply_dark(ref_data, ref_path)
-        ref_data = get_and_apply_flat(ref_data, ref_path)
+        ref_data, ref_mult = get_and_apply_flat(ref_data, ref_path)
+        if ref_data is None:
+            print(f"  [Error] Reference frame skipped due to missing background file for {args.flat_mult_mode}. Stacking aborted.")
+            return
+        flat_mults_used.append(ref_mult)
         
         # Save reference to disk
         ref_tmp_path = os.path.join(tmp_dir, "ref_aligned.npy")
@@ -1082,7 +1213,10 @@ def main():
                 img_data = load_image(f_path, color=args.color)
                 # Calibration sequence: 1. Dark, 2. Flat
                 img_data = get_and_apply_dark(img_data, f_path)
-                img_data = get_and_apply_flat(img_data, f_path)
+                img_data, img_mult = get_and_apply_flat(img_data, f_path)
+                if img_data is None:
+                    continue
+                flat_mults_used.append(img_mult)
                 aligned, _ = register_images(ref_data, img_data)
                 
                 if aligned is not None:
@@ -1121,7 +1255,7 @@ def main():
             # --- Report Generation ---
             print("  [Report] Generating session reports...")
             try:
-                report_data = get_report_data(args, initial_files, valid_files, metadata_map, list(dark_files_used), list(flat_files_used), meta_warnings, dark_cache, flat_cache)
+                report_data = get_report_data(args, initial_files, valid_files, metadata_map, list(dark_files_used), list(flat_files_used), meta_warnings, dark_cache, flat_cache, flat_mults_used)
                 generate_reports(report_data)
             except Exception as e:
                 print(f"  [Error] Report generation failed: {e}")

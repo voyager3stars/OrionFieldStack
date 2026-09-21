@@ -34,10 +34,126 @@ from dataclasses import dataclass
 logging.getLogger('exifread').setLevel(logging.ERROR)
 
 # --- GPIO Backend Configuration ---
-# Forces the use of the 'lgpio' factory. This is critical for compatibility 
-# with newer Raspberry Pi hardware (Pi 5) and newer OS versions (Bookworm).
-os.environ["GPIOZERO_PIN_FACTORY"] = "lgpio"
-from gpiozero import LED
+# Uses raw lgpio for direct hardware control, bypassing gpiozero's chip detection
+# which fails on Pi 5 Bookworm with dynamic gpiochip numbering (gpiochip11-16).
+import glob
+try:
+    import lgpio
+except ImportError:
+    lgpio = None
+
+
+def _find_rp1_chip():
+    """
+    Discovers the RP1 gpiochip number for the Raspberry Pi 5's 40-pin header.
+    On Pi 5 / Bookworm, the RP1 chip provides the physical header GPIO pins
+    but its device number is dynamically assigned (e.g. /dev/gpiochip15).
+    
+    Strategy:
+      1. Scan /sys/bus/gpio/devices/gpiochipN/label for 'pinctrl-rp1'
+      2. Fall back to 'gpiodetect' command output
+      3. Fall back to chip=4 (early Pi 5 kernels) or chip=0 (Pi 4 and older)
+    """
+    # Strategy 1: Scan sysfs labels
+    for path in sorted(glob.glob("/sys/bus/gpio/devices/gpiochip*/label")):
+        try:
+            with open(path, "r") as f:
+                label = f.read().strip()
+            if "pinctrl-rp1" in label:
+                chip_num = int(path.split("gpiochip")[1].split("/")[0])
+                return chip_num
+        except Exception:
+            continue
+
+    # Strategy 2: Parse gpiodetect output
+    try:
+        import subprocess
+        result = subprocess.run(["gpiodetect"], capture_output=True, text=True, timeout=5)
+        for line in result.stdout.splitlines():
+            if "pinctrl-rp1" in line:
+                chip_num = int(line.split("[")[0].strip().replace("gpiochip", ""))
+                return chip_num
+    except Exception:
+        pass
+
+    # Strategy 3: Static fallback (Pi 5 early kernel = 4, Pi 4/older = 0)
+    if os.path.exists("/dev/gpiochip4"):
+        return 4
+    return 0
+
+
+class LgpioShutter:
+    """
+    Direct lgpio-based GPIO output driver for shutter control.
+    Compatible with gpiozero's LED interface (.on(), .off(), .is_lit).
+    Uses raw lgpio to avoid gpiozero's broken Pi 5 chip detection.
+    """
+    def __init__(self, pin, chip):
+        self._pin = pin
+        self._chip = chip
+        self._handle = lgpio.gpiochip_open(chip)
+        lgpio.gpio_claim_output(self._handle, pin)
+        self.is_lit = False
+
+    def on(self):
+        lgpio.gpio_write(self._handle, self._pin, 1)
+        self.is_lit = True
+
+    def off(self):
+        lgpio.gpio_write(self._handle, self._pin, 0)
+        self.is_lit = False
+
+    def close(self):
+        try:
+            lgpio.gpio_write(self._handle, self._pin, 0)
+            lgpio.gpio_free(self._handle, self._pin)
+            lgpio.gpiochip_close(self._handle)
+        except Exception:
+            pass
+
+    def __del__(self):
+        self.close()
+
+
+class DummyLED:
+    """Fallback Dummy LED when hardware GPIO is unavailable."""
+    def __init__(self, pin):
+        self.pin = pin
+        self.is_lit = False
+    def on(self):
+        self.is_lit = True
+    def off(self):
+        self.is_lit = False
+
+
+def init_shutter(gpio_pin):
+    """
+    Initializes hardware shutter via raw lgpio.
+    Dynamically discovers the RP1 gpiochip on Raspberry Pi 5 / Bookworm,
+    and falls back safely to DummyLED if hardware is unavailable.
+    """
+    if lgpio is not None:
+        try:
+            chip = _find_rp1_chip()
+            shutter = LgpioShutter(gpio_pin, chip)
+            print(f"\033[38;5;208m SP03>> Shutter initialized: GPIO {gpio_pin} on /dev/gpiochip{chip} (lgpio direct)\033[0m")
+            return shutter
+        except Exception as e:
+            print(f"\033[38;5;208m SP03>> Warning: lgpio init failed on RP1 chip: {e}\033[0m")
+
+            # Fallback: try all available chips
+            for path in sorted(glob.glob("/dev/gpiochip*")):
+                try:
+                    chip_num = int(path.replace("/dev/gpiochip", ""))
+                    shutter = LgpioShutter(gpio_pin, chip_num)
+                    print(f"\033[38;5;208m SP03>> Shutter initialized: GPIO {gpio_pin} on /dev/gpiochip{chip_num} (lgpio fallback)\033[0m")
+                    return shutter
+                except Exception:
+                    continue
+
+    # Final fallback to DummyLED
+    print(f"\033[38;5;208m SP03>> Warning: GPIO pin {gpio_pin} could not be initialized on hardware. Using Dummy Shutter.\033[0m")
+    return DummyLED(gpio_pin)
 
 # --- Project-Specific Modules ---
 # These modules are assumed to be in the same directory or python path.
@@ -310,7 +426,7 @@ def main():
         os.makedirs(CONFIG["SAVE_DIR"], exist_ok=True)
 
     # --- Hardware & Threading Setup ---
-    shutter = LED(CONFIG["GPIO_SHUTTER"])
+    shutter = init_shutter(CONFIG["GPIO_SHUTTER"])
 
     # Startup Status Report
     utils.sp_print(f"=== ShutterPro03 (v{CONFIG['VERSION']}) === Engine Online =============", CONFIG, level="simple")

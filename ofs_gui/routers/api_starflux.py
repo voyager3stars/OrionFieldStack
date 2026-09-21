@@ -20,6 +20,9 @@ async def start_starflux(request: Request):
         file_name = form_data.get("file_name")
         force = form_data.get("force") == "true"
         plot = form_data.get("plot") == "true"
+        save_bg = form_data.get("save_bg") == "true"
+        bg_format = form_data.get("bg_format")
+        outpath = form_data.get("outpath")
         snr = form_data.get("snr")
         top_stars = form_data.get("top_stars")
 
@@ -40,6 +43,12 @@ async def start_starflux(request: Request):
             cmd.append("--force")
         if plot:
             cmd.append("--plot")
+        if save_bg:
+            cmd.append("--save-bg-image")
+        if bg_format:
+            cmd.extend(["--bg-format", bg_format])
+        if outpath:
+            cmd.extend(["--outpath", outpath])
         if snr:
             cmd.extend(["--snr", snr])
         if top_stars:

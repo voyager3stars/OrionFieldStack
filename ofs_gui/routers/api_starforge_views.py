@@ -396,6 +396,15 @@ async def starforge_bg_view(request: Request):
         cx = form_data.get("cx", "")
         cy = form_data.get("cy", "")
         files_str = form_data.get("files", "")
+        use_flat = form_data.get("use_flat", "false").lower() == "true"
+        flat_dir = form_data.get("flat_dir", "")
+        flat_session = form_data.get("flat_session", "")
+        flat_mult = form_data.get("flat_mult", "1.0")
+        flat_mult_mode = form_data.get("flat_mult_mode")
+        if flat_mult_mode in ["auto_ccr", "auto_fit"]:
+            flat_mult = flat_mult_mode
+        elif flat_mult_mode == "manual":
+            flat_mult = form_data.get("flat_mult_value", "1.0")
     else:
         dir = request.query_params.get("dir", "")
         session = request.query_params.get("session", "")
@@ -404,6 +413,15 @@ async def starforge_bg_view(request: Request):
         cx = request.query_params.get("cx", "")
         cy = request.query_params.get("cy", "")
         files_str = request.query_params.get("files", "")
+        use_flat = request.query_params.get("use_flat", "false").lower() == "true"
+        flat_dir = request.query_params.get("flat_dir", "")
+        flat_session = request.query_params.get("flat_session", "")
+        flat_mult = request.query_params.get("flat_mult", "1.0")
+        flat_mult_mode = request.query_params.get("flat_mult_mode")
+        if flat_mult_mode in ["auto_ccr", "auto_fit"]:
+            flat_mult = flat_mult_mode
+        elif flat_mult_mode == "manual":
+            flat_mult = request.query_params.get("flat_mult_value", "1.0")
 
     abs_dir = os.path.abspath(os.path.expanduser(dir))
     log_file = os.path.join(abs_dir, "shutter_log.json")
@@ -459,6 +477,93 @@ async def starforge_bg_view(request: Request):
         from fastapi.responses import HTMLResponse
         return HTMLResponse("<html><body><h3>Error: No background images found in the specified directory/session.</h3></body></html>", status_code=404)
 
+    # Resolve flat file path
+    flat_file_path = ""
+    if use_flat and flat_dir:
+        flat_abs_dir = os.path.abspath(os.path.expanduser(flat_dir))
+        search_dirs = [flat_abs_dir, os.path.join(flat_abs_dir, "out")]
+        for s_dir in search_dirs:
+            if os.path.exists(s_dir):
+                try:
+                    for f in os.listdir(s_dir):
+                        if f.startswith("master_flat_") and f.lower().endswith(('.fits', '.fit')):
+                            if not flat_session or f"_{flat_session}" in f:
+                                flat_file_path = os.path.join(s_dir, f)
+                                break
+                except Exception:
+                    pass
+            if flat_file_path:
+                break
+    
+    # Load flat sessions if flat_dir is provided
+    flat_sessions = []
+    if flat_dir:
+        flat_abs = os.path.abspath(os.path.expanduser(flat_dir))
+        flat_log = os.path.join(flat_abs, "shutter_log.json")
+        if os.path.exists(flat_log):
+            try:
+                with open(flat_log, "r") as f:
+                    f_logs = json.load(f)
+                session_set = set()
+                for rec in f_logs:
+                    sid = rec.get("session_id")
+                    if sid:
+                        session_set.add(sid)
+                flat_sessions = sorted(list(session_set), reverse=True)
+            except Exception:
+                pass
+    
+    flat_sessions_html = ""
+    if flat_dir:
+        if not flat_sessions:
+            flat_sessions_html = '<div class="list-item"><div class="item-label" style="color:var(--text-dim);">No sessions found</div></div>'
+        else:
+            for sid in flat_sessions:
+                selected_cls = "selected" if sid == flat_session else ""
+                flat_sessions_html += f'''
+                <div class="list-item {selected_cls}" onclick="changeFlatSession('{sid}')">
+                    <div class="item-label"><span class="session-name">{sid}</span></div>
+                </div>
+                '''
+        
+        status_text = "Applied" if (use_flat and flat_file_path) else ("Not found (No matching master_flat)" if use_flat else "Disabled")
+        status_color = "var(--accent-gold)" if (use_flat and flat_file_path) else "var(--text-dim)"
+        
+        flat_ui_html = f'''
+        <div style="padding: 12px; border-top: 1px solid var(--glass-border); background: var(--bg-card); display: flex; flex-direction: column;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                <h3 style="margin: 0; font-size: 0.8rem; color: var(--accent-gold);">CALIBRATION SETTINGS</h3>
+                <button type="button" class="btn-small" onclick="reloadWithParams({{}})" style="padding: 2px 6px; font-size: 0.65rem; background: #333; color: #fff; border: 1px solid #555; border-radius: 3px; cursor: pointer;">Redraw</button>
+            </div>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                <label style="display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 0.8rem; cursor: pointer;">
+                    <input type="checkbox" id="bg-use-flat" {"checked" if use_flat else ""} onchange="toggleFlat(this.checked)">
+                    Flat Calibration
+                </label>
+                <div style="display: flex; align-items: center; gap: 6px;">
+                    <span style="font-size: 0.7rem; color: var(--text-dim);">Multiplier</span>
+                    <input type="number" id="bg-flat-mult" value="{flat_mult if flat_mult not in ['auto_ccr', 'auto_fit'] else '1.0'}" min="0.0" max="3.0" step="0.01" style="width: 60px; padding: 2px 4px; font-size: 0.7rem; background: var(--bg-input); color: #fff; border: 1px solid var(--glass-border); border-radius: 3px;" onchange="reloadWithParams({{}})">
+                    <button type="button" class="btn-small" onclick="reloadWithParams({{flat_mult: 'auto_ccr'}})" style="padding: 2px 6px; font-size: 0.65rem; background: #333; color: #fff; border: 1px solid #555; border-radius: 3px; cursor: pointer;" title="Auto adjust to make CCR 0">Auto CCR</button>
+                    <button type="button" class="btn-small" onclick="reloadWithParams({{flat_mult: 'auto_fit'}})" style="padding: 2px 6px; font-size: 0.65rem; background: #333; color: #fff; border: 1px solid #555; border-radius: 3px; cursor: pointer;" title="Auto adjust to make Fit 0">Auto Fit</button>
+                </div>
+            </div>
+            <div style="font-size: 0.65rem; color: {status_color}; margin-bottom: 8px; padding-left: 20px;">Status: {status_text}</div>
+            
+            <div style="font-size: 0.7rem; color: var(--text-dim); margin-bottom: 4px;">Flat Directory</div>
+            <div style="font-size: 0.75rem; word-break: break-all; margin-bottom: 8px; font-family: 'JetBrains Mono', monospace;">{flat_dir}</div>
+            <div style="font-size: 0.7rem; color: var(--text-dim); margin-bottom: 4px;">Flat Session (optional)</div>
+            <div class="list-container" style="max-height: 100px; overflow-y: auto; padding: 0; background: var(--bg-sidebar); border: 1px solid var(--glass-border); border-radius: 6px;">
+                {flat_sessions_html}
+            </div>
+        </div>
+        '''
+    else:
+        flat_ui_html = '''
+        <div style="padding: 12px; border-top: 1px solid var(--glass-border); background: var(--bg-card);">
+            <div style="font-size: 0.75rem; color: var(--text-dim);">No Flat Directory configured.<br>Please set it in the main GUI.</div>
+        </div>
+        '''
+
     if file and file in file_map:
         selected_filename = file
     else:
@@ -509,10 +614,74 @@ file_path = sys.argv[1]
 cx_str = sys.argv[2] if len(sys.argv) > 2 else ""
 cy_str = sys.argv[3] if len(sys.argv) > 3 else ""
 bg_image_path = sys.argv[4] if len(sys.argv) > 4 else ""
+use_flat_str = sys.argv[5] if len(sys.argv) > 5 else "false"
+flat_dir_str = sys.argv[6] if len(sys.argv) > 6 else ""
+flat_session_str = sys.argv[7] if len(sys.argv) > 7 else ""
+flat_file_path_str = sys.argv[8] if len(sys.argv) > 8 else ""
+flat_mult_str = sys.argv[9] if len(sys.argv) > 9 else "1.0"
+
 cx = int(cx_str) if cx_str.lstrip("-").isdigit() else -1
 cy = int(cy_str) if cy_str.lstrip("-").isdigit() else -1
+use_flat = use_flat_str.lower() == "true"
+auto_mode = None
+try:
+    flat_mult = float(flat_mult_str)
+except ValueError:
+    if flat_mult_str in ["auto_ccr", "auto_fit"]:
+        auto_mode = flat_mult_str
+    flat_mult = 1.0
 
-def load_img(f_path):
+def calculate_convexity_metrics(convex_data):
+    ccr_pct = 0.0
+    curv_val = 0.0
+    if convex_data.size > 1:
+        ch_c, cw_c = convex_data.shape
+        cy_c, cx_c = ch_c // 2, cw_c // 2
+        dy, dx = max(1, ch_c // 10), max(1, cw_c // 10)  # 20% x 20% area (offset by 10% from edges)
+        
+        center_region = convex_data[cy_c-dy:cy_c+dy, cx_c-dx:cx_c+dx]
+        # Exclude outer 10% (dy, dx) and take 20% x 20% area (2*dy, 2*dx) from there.
+        corner_tl = convex_data[dy:3*dy, dx:3*dx]
+        corner_tr = convex_data[dy:3*dy, -3*dx:-dx]
+        corner_bl = convex_data[-3*dy:-dy, dx:3*dx]
+        corner_br = convex_data[-3*dy:-dy, -3*dx:-dx]
+        
+        center_med = np.median(center_region) if center_region.size > 0 else 0
+        corners = np.concatenate([corner_tl.flatten(), corner_tr.flatten(), corner_bl.flatten(), corner_br.flatten()])
+        corner_med = np.median(corners) if corners.size > 0 else 0
+        
+        if corner_med > 0:
+            ccr_pct = (center_med - corner_med) / corner_med * 100.0
+            
+        h_s, w_s = convex_data.shape
+        grid_h_s, grid_w_s = h_s / 16.0, w_s / 16.0
+        x_pts, y_pts, z_pts = [], [], []
+        for i in range(16):
+            for j in range(16):
+                r_s = int(i * grid_h_s)
+                r_e = int((i+1)*grid_h_s) if i < 15 else h_s
+                c_s = int(j * grid_w_s)
+                c_e = int((j+1)*grid_w_s) if j < 15 else w_s
+                reg = convex_data[r_s:r_e, c_s:c_e]
+                if reg.size > 0:
+                    y_pts.append(i - 7.5)
+                    x_pts.append(j - 7.5)
+                    z_pts.append(np.median(reg))
+        
+        if len(z_pts) > 0:
+            x_pts, y_pts, z_pts = np.array(x_pts), np.array(y_pts), np.array(z_pts)
+            A_mat = np.c_[x_pts**2, y_pts**2, x_pts, y_pts, np.ones_like(x_pts)]
+            try:
+                coeffs, _, _, _ = np.linalg.lstsq(A_mat, z_pts, rcond=None)
+                A, B = coeffs[0], coeffs[1]
+                z_mean = np.mean(z_pts)
+                if z_mean > 0:
+                    curv_val = -(A + B) * 56.25 / z_mean * 100.0
+            except:
+                pass
+    return ccr_pct, curv_val
+
+def load_img(f_path, target_shape=None):
     if not f_path or not os.path.exists(f_path): return None
     d = None
     try:
@@ -533,11 +702,27 @@ def load_img(f_path):
                 with rawpy.imread(f_path) as raw:
                     rgb = raw.postprocess(use_camera_wb=True, half_size=True, no_auto_bright=True, output_bps=16)
                     d = np.mean(rgb, axis=2)
+        elif ext == 'npz':
+            with np.load(f_path) as npz:
+                d = npz['bg']
         else:
             img = Image.open(f_path).convert('L')
             d = np.array(img)
     except Exception:
         pass
+        
+    if d is not None and target_shape is not None and d.shape != target_shape:
+        import scipy.ndimage
+        zoom_y = target_shape[0] / d.shape[0]
+        zoom_x = target_shape[1] / d.shape[1]
+        
+        # Optimize for exact integer downsampling
+        if abs(zoom_y - 0.5) < 1e-4 and abs(zoom_x - 0.5) < 1e-4:
+            d = d[::2, ::2]
+        else:
+            d = d.astype(float) # Ensure native endian float for scipy.ndimage
+            d = scipy.ndimage.zoom(d, (zoom_y, zoom_x), order=0)
+            
     return d
 
 try:
@@ -548,6 +733,41 @@ try:
         sys.exit(0)
     
     h, w = data.shape
+    
+    flat_data = None
+    flat_mean = 1.0
+    if use_flat and flat_file_path_str and os.path.exists(flat_file_path_str):
+        flat_data = load_img(flat_file_path_str, target_shape=(h, w))
+        if flat_data is not None:
+            # Avoid division by zero
+            flat_data = np.where(flat_data == 0, 1.0, flat_data)
+            flat_mean = np.mean(flat_data)
+            flat_factor = flat_mean / flat_data
+
+    bg_data = load_img(bg_image_path, target_shape=(h, w))
+    
+    if auto_mode and flat_data is not None and bg_data is not None:
+        import scipy.optimize
+        h_bg, w_bg = bg_data.shape
+        scale_2d_bg_opt = max(1, round(w_bg / 160))  # Downsample heavily for fast optimization
+        bg_data_down = bg_data[::scale_2d_bg_opt, ::scale_2d_bg_opt].astype(float)
+        flat_factor_down = flat_factor[::scale_2d_bg_opt, ::scale_2d_bg_opt]
+        
+        def objective(m):
+            test_z = bg_data_down * (flat_factor_down ** m)
+            test_z = np.nan_to_num(test_z, nan=0.0, posinf=0.0, neginf=0.0)
+            ccr, fit = calculate_convexity_metrics(test_z)
+            return abs(ccr) if auto_mode == "auto_ccr" else abs(fit)
+            
+        res = scipy.optimize.minimize_scalar(objective, bounds=(0.0, 3.0), method='bounded')
+        if res.success:
+            flat_mult = float(res.x)
+
+    if flat_data is not None:
+        data = data * (flat_factor ** flat_mult)
+        if bg_data is not None:
+            bg_data = bg_data * (flat_factor ** flat_mult)
+
     scale_2d = max(1, round(w / 640))
     scale_3d = max(1, round(w / 150))
     
@@ -560,7 +780,6 @@ try:
     z_data_3d = data_small_3d.astype(float)
     z_data_3d = np.nan_to_num(z_data_3d, nan=0.0, posinf=0.0, neginf=0.0)
     
-    bg_data = load_img(bg_image_path)
     if bg_data is not None:
         h_bg, w_bg = bg_data.shape
         scale_2d_bg = max(1, round(w_bg / 640))
@@ -580,7 +799,11 @@ try:
         x_slice_bg = []
         y_slice_bg = []
         
-    z_max = float(np.max(z_data))
+    if bg_data is not None and float(np.max(z_data_bg)) > 0:
+        z_max = float(np.max(z_data_bg)) * 1.1
+    else:
+        z_max = float(np.max(z_data)) * 1.1
+        
     if z_max <= 0:
         z_max = 255.0
     
@@ -605,6 +828,14 @@ try:
                 med = float(np.median(region))
                 medians_16x16[i, j] = med
                 mads_16x16[i, j] = float(np.median(np.abs(region - med)))
+
+    # Convexity metrics
+    ccr_pct = 0.0
+    curv_val = 0.0
+    convex_data = z_data_bg if (bg_data is not None and z_data_bg.size > 1) else z_data
+    ccr_pct, curv_val = calculate_convexity_metrics(convex_data)
+
+    convexity_html = f"CCR: {ccr_pct:+.1f}% | Fit: {curv_val:+.1f}%"
 
     html_template = '''
     <!DOCTYPE html>
@@ -637,12 +868,19 @@ try:
                 form.method = 'POST';
                 form.action = '/api/starforge/bg_view';
                 
+                var currentUseFlat = document.getElementById('bg-use-flat') ? (document.getElementById('bg-use-flat').checked ? 'true' : 'false') : __USE_FLAT_JS__;
+                var currentFlatMult = document.getElementById('bg-flat-mult') ? document.getElementById('bg-flat-mult').value : __FLAT_MULT_JS__;
+                
                 var params = {
                     'dir': __DIR_JS__,
                     'session': __SESSION_JS__,
                     'out_dir': __OUT_DIR_JS__,
                     'files': __FILES_JS__,
-                    'file': filename
+                    'file': filename,
+                    'use_flat': currentUseFlat,
+                    'flat_dir': __FLAT_DIR_JS__,
+                    'flat_session': __FLAT_SESSION_JS__,
+                    'flat_mult': currentFlatMult
                 };
                 
                 for (var key in params) {
@@ -656,6 +894,51 @@ try:
                 }
                 document.body.appendChild(form);
                 form.submit();
+            }
+            
+            function reloadWithParams(updates) {
+                var form = document.createElement('form');
+                form.method = 'POST';
+                form.action = '/api/starforge/bg_view';
+                
+                var currentUseFlat = document.getElementById('bg-use-flat') ? (document.getElementById('bg-use-flat').checked ? 'true' : 'false') : __USE_FLAT_JS__;
+                var currentFlatMult = document.getElementById('bg-flat-mult') ? document.getElementById('bg-flat-mult').value : __FLAT_MULT_JS__;
+                
+                var params = {
+                    'dir': __DIR_JS__,
+                    'session': __SESSION_JS__,
+                    'out_dir': __OUT_DIR_JS__,
+                    'files': __FILES_JS__,
+                    'file': __FILE_JS__,
+                    'use_flat': currentUseFlat,
+                    'flat_dir': __FLAT_DIR_JS__,
+                    'flat_session': __FLAT_SESSION_JS__,
+                    'flat_mult': currentFlatMult
+                };
+                
+                for (var key in updates) {
+                    params[key] = updates[key];
+                }
+                
+                for (var key in params) {
+                    if (params[key] !== '' && params[key] !== null) {
+                        var input = document.createElement('input');
+                        input.type = 'hidden';
+                        input.name = key;
+                        input.value = params[key];
+                        form.appendChild(input);
+                    }
+                }
+                document.body.appendChild(form);
+                form.submit();
+            }
+            
+            function toggleFlat(checked) {
+                reloadWithParams({'use_flat': checked ? 'true' : 'false'});
+            }
+            
+            function changeFlatSession(sid) {
+                reloadWithParams({'flat_session': sid});
             }
         </script>
     </head>
@@ -674,6 +957,7 @@ try:
                         <div class="list-container" style="padding: 0; display: flex; flex-direction: column; flex: 1; overflow-y: auto;">
                             __OPTIONS__
                         </div>
+                        __FLAT_UI__
                     </aside>
                     <div class="col-center">
                         <!-- NEW BAR CHART -->
@@ -700,7 +984,10 @@ try:
                                 <div id="plot" style="width: 100%; height: 100%;"></div>
                             </div>
                             <div style="flex: 1; position: relative;">
-                                <div style="position: absolute; top: 10px; left: 10px; z-index: 10; background: rgba(0,0,0,0.6); padding: 4px 8px; border-radius: 4px; color: var(--accent-gold); font-weight: bold; font-size: 0.8rem;">Background Image</div>
+                                <div style="position: absolute; top: 10px; left: 10px; z-index: 10; background: rgba(0,0,0,0.6); padding: 4px 8px; border-radius: 4px; color: var(--accent-gold); font-weight: bold; font-size: 0.8rem; display: flex; flex-direction: column; gap: 4px;">
+                                    <span>Background Image</span>
+                                    <span style="font-size: 0.7rem; color: #fff; background: #333; padding: 2px 6px; border-radius: 3px; white-space: nowrap;">Convexity: __CONVEXITY_HTML__</span>
+                                </div>
                                 <div id="plot-bg" style="width: 100%; height: 100%;"></div>
                             </div>
                         </div>
@@ -1102,11 +1389,20 @@ try:
             
             // Force apply range once to ensure 3D scene correctly clips
             updateZRange();
+            
+            var optimizedMult = __OPTIMIZED_FLAT_MULT__;
+            if (optimizedMult !== null) {
+                var multInput = document.getElementById('bg-flat-mult');
+                if (multInput) {
+                    multInput.value = optimizedMult.toFixed(3);
+                }
+            }
         </script>
     </body>
     </html>
     '''
     html = html_template.replace('__FILENAME__', file_path)\
+        .replace('__OPTIMIZED_FLAT_MULT__', str(flat_mult) if auto_mode else "null")\
         .replace('__ZDATA3D__', json.dumps(z_data_3d.tolist()))\
         .replace('__ZDATA3D_BG__', json.dumps(z_data_3d_bg.tolist()))\
         .replace('__ZDATA__', json.dumps(z_data.tolist()))\
@@ -1119,7 +1415,8 @@ try:
         .replace('__ZDATA_FULL_LENGTH__', str(len(z_data)))\
         .replace('__ZDATA_FULL_WIDTH__', str(len(z_data[0]) if len(z_data) > 0 else 0))\
         .replace('__MEDIANS_16X16__', json.dumps(medians_16x16.tolist()))\
-        .replace('__MADS_16X16__', json.dumps(mads_16x16.tolist()))
+        .replace('__MADS_16X16__', json.dumps(mads_16x16.tolist()))\
+        .replace('__CONVEXITY_HTML__', convexity_html)
     print(html)
 except Exception as e:
     print(f"<html><body><h3>Error processing image: {str(e)}</h3></body></html>")
@@ -1128,7 +1425,7 @@ except Exception as e:
         from fastapi.responses import HTMLResponse
         proc = await asyncio.create_subprocess_exec(
             get_starforge_python(), "-c", python_code, target_file,
-            cx, cy, bg_image_path,
+            cx, cy, bg_image_path, str(use_flat).lower(), flat_dir, flat_session, flat_file_path, str(flat_mult),
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE
         )
@@ -1142,13 +1439,19 @@ except Exception as e:
         final_html = stdout.decode(errors='replace')\
             .replace('__PREVIEW__', preview_html)\
             .replace('__OPTIONS__', options_html)\
+            .replace('__FLAT_UI__', flat_ui_html)\
             .replace('__FILENAMES__', json.dumps(chart_filenames))\
             .replace('__BGMEDIANS__', json.dumps(chart_medians))\
             .replace('__SELECTED_FILENAME__', selected_filename)\
             .replace('__DIR_JS__', json.dumps(dir))\
             .replace('__SESSION_JS__', json.dumps(session))\
             .replace('__OUT_DIR_JS__', json.dumps(out_dir))\
-            .replace('__FILES_JS__', json.dumps(files_str))
+            .replace('__FILES_JS__', json.dumps(files_str))\
+            .replace('__FILE_JS__', json.dumps(selected_filename))\
+            .replace('__USE_FLAT_JS__', json.dumps('true' if use_flat else 'false'))\
+            .replace('__FLAT_DIR_JS__', json.dumps(flat_dir))\
+            .replace('__FLAT_SESSION_JS__', json.dumps(flat_session))\
+            .replace('__FLAT_MULT_JS__', json.dumps(flat_mult))
         return HTMLResponse(final_html)
     except Exception as e:
         from fastapi.responses import HTMLResponse

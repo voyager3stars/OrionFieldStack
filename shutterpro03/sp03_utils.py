@@ -344,13 +344,14 @@ def load_config_file(base_config):
                 ext_conf = json.load(f)
             if "SYSTEM" in ext_conf:
                 for k, v in ext_conf["SYSTEM"].items():
-                    if k in base_config: base_config[k] = v
+                    if k in base_config:
+                        base_config[k] = v
                     elif 'SYSTEM' in base_config and isinstance(base_config['SYSTEM'], dict):
                         base_config['SYSTEM'][k] = v
+                    else:
+                        base_config[k] = v
                     if k == "SAVE_DIR":
-                         if k in base_config: base_config[k] = os.path.expanduser(v)
-                         if 'SYSTEM' in base_config and isinstance(base_config['SYSTEM'], dict):
-                             base_config['SYSTEM'][k] = os.path.expanduser(v)
+                        base_config[k] = os.path.expanduser(v)
             if "CONTEXT" in ext_conf and "CONTEXT" in base_config:
                 base_config["CONTEXT"].update(ext_conf["CONTEXT"])
             if "EQUIPMENT" in ext_conf and "EQUIPMENT" in base_config:
@@ -359,9 +360,11 @@ def load_config_file(base_config):
                 for key in ["telescope", "optics", "focal_length_mm", "aperture_mm", "camera"]:
                     if key in base_config["EQUIPMENT"]:
                         base_config[key] = base_config["EQUIPMENT"][key]
+            print(f"\033[38;5;208m SP03>> Loaded configuration from '{config_path}'.\033[0m")
         except Exception as e:
             print(f" SP03>> Error loading config.json: {e}")
     return base_config
+
 
 # --- Common Utilities (Legacy Support) ---
 
@@ -417,5 +420,8 @@ def calculate_equipment_specs(eq_config):
     except: return None, None
 
 def to_float_or_none(val):
-    try: return float(val)
-    except (TypeError, ValueError): return None
+    try:
+        f = float(val)
+        return f if math.isfinite(f) else None
+    except (TypeError, ValueError):
+        return None

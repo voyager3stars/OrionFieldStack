@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OFS Map Area Manager</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #1e1e1e;
+            color: #eee;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        h1, h2 {
+            color: #fff;
+            border-bottom: 1px solid #444;
+            padding-bottom: 10px;
+        }
+        .card {
+            background-color: #2c2c2c;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+        th, td {
+            padding: 10px;
+            text-align: left;
+            border-bottom: 1px solid #444;
+        }
+        th {
+            background-color: #333;
+        }
+        input {
+            background-color: #1e1e1e;
+            color: white;
+            border: 1px solid #555;
+            padding: 8px;
+            border-radius: 4px;
+            width: 100%;
+            box-sizing: border-box;
+            margin-bottom: 10px;
+        }
+        button {
+            background-color: #2196F3;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        button:hover {
+            background-color: #1976D2;
+        }
+        button.danger {
+            background-color: #F44336;
+        }
+        button.danger:hover {
+            background-color: #D32F2F;
+        }
+        button.success {
+            background-color: #4CAF50;
+            width: 100%;
+            font-size: 16px;
+            margin-top: 10px;
+        }
+        button.success:hover {
+            background-color: #388E3C;
+        }
+        .grid-2 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+        #sync-status {
+            margin-top: 10px;
+            padding: 10px;
+            background-color: #333;
+            border-radius: 4px;
+            font-family: monospace;
+        }
+        a.back {
+            color: #64B5F6;
+            text-decoration: none;
+            display: inline-block;
+            margin-bottom: 20px;
+        }
+        a.back:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="/" class="back">← Back to Map Viewer</a>
+        <h1>Map Area Manager</h1>
+
+        <div class="card">
+            <h2>Configured Regions</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Zoom Range</th>
+                        <th>BBox (Min / Max)</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="regions-tbody">
+                    <!-- Populated via JS -->
+                </tbody>
+            </table>
+        </div>
+
+        <div class="card">
+            <h2>Synchronize Tiles</h2>
+            <p>Download missing tiles and delete unused tiles for all configured regions.</p>
+            <button id="run-sync-btn" class="success" onclick="startSync()">Run Sync Process</button>
+            <button id="cancel-sync-btn" class="danger" style="display:none; width: 100%; margin-top: 10px; font-size: 16px;" onclick="cancelSync()">Cancel Sync</button>
+            <div id="sync-status">Status: Idle</div>
+        </div>
+
+        <div class="card">
+            <h2>Add New Region</h2>
+            <div class="grid-2">
+                <div>
+                    <label>Region Name</label>
+                    <input type="text" id="add-name" placeholder="e.g. Tokyo">
+                </div>
+                <div></div>
+                <div>
+                    <label>Min Latitude (South)</label>
+                    <input type="number" step="0.000001" id="add-min-lat" placeholder="35.65">
+                </div>
+                <div>
+                    <label>Max Latitude (North)</label>
+                    <input type="number" step="0.000001" id="add-max-lat" placeholder="35.66">
+                </div>
+                <div>
+                    <label>Min Longitude (West)</label>
+                    <input type="number" step="0.000001" id="add-min-lon" placeholder="139.74">
+                </div>
+                <div>
+                    <label>Max Longitude (East)</label>
+                    <input type="number" step="0.000001" id="add-max-lon" placeholder="139.75">
+                </div>
+                <div>
+                    <label>Min Zoom</label>
+                    <input type="number" id="add-min-zoom" value="6">
+                </div>
+                <div>
+                    <label>Max Zoom</label>
+                    <input type="number" id="add-max-zoom" value="14">
+                </div>
+            </div>
+            <button onclick="addRegion()" style="margin-top: 10px;">Add Region</button>
+        </div>
+    </div>
+
+    <script>
+        async function loadRegions() {
+            const res = await fetch('/api/regions');
+            const data = await res.json();
+            const tbody = document.getElementById('regions-tbody');
+            tbody.innerHTML = '';
+            
+            if (data.regions) {
+                data.regions.forEach(r => {
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td>${r.name}</td>
+                        <td>${r.min_zoom} - ${r.max_zoom}</td>
+                        <td>[${r.min_lat}, ${r.min_lon}]<br>[${r.max_lat}, ${r.max_lon}]</td>
+                        <td>
+                            <button class="danger" onclick="deleteRegion('${r.name}')">Delete</button>
+                        </td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            }
+        }
+
+        async function addRegion() {
+            const data = {
+                name: document.getElementById('add-name').value,
+                min_lat: parseFloat(document.getElementById('add-min-lat').value),
+                max_lat: parseFloat(document.getElementById('add-max-lat').value),
+                min_lon: parseFloat(document.getElementById('add-min-lon').value),
+                max_lon: parseFloat(document.getElementById('add-max-lon').value),
+                min_zoom: parseInt(document.getElementById('add-min-zoom').value),
+                max_zoom: parseInt(document.getElementById('add-max-zoom').value)
+            };
+
+            if (!data.name || isNaN(data.min_lat) || isNaN(data.max_lat)) {
+                alert("Please fill in all fields correctly.");
+                return;
+            }
+
+            const res = await fetch('/api/regions', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(data)
+            });
+
+            if (res.ok) {
+                loadRegions();
+                alert("Region added successfully.");
+            } else {
+                const err = await res.json();
+                alert("Error: " + err.detail);
+            }
+        }
+
+        async function deleteRegion(name) {
+            if (!confirm(`Are you sure you want to delete ${name}?`)) return;
+
+            const res = await fetch(`/api/regions/${name}`, { method: 'DELETE' });
+            if (res.ok) {
+                loadRegions();
+            } else {
+                alert("Error deleting region.");
+            }
+        }
+
+        async function startSync() {
+            const res = await fetch('/api/sync', { method: 'POST' });
+            const data = await res.json();
+            pollSyncStatus();
+        }
+
+        async function cancelSync() {
+            await fetch('/api/sync/cancel', { method: 'POST' });
+            document.getElementById('sync-status').textContent = 'Status: Cancelling...';
+        }
+
+        async function pollSyncStatus() {
+            const res = await fetch('/api/sync/status');
+            const data = await res.json();
+            const statusDiv = document.getElementById('sync-status');
+            const startBtn = document.getElementById('run-sync-btn');
+            const cancelBtn = document.getElementById('cancel-sync-btn');
+            
+            statusDiv.textContent = `Status: ${data.status}`;
+            
+            if (data.is_syncing) {
+                statusDiv.style.color = "#FFC107";
+                startBtn.style.display = 'none';
+                cancelBtn.style.display = 'inline-block';
+                setTimeout(pollSyncStatus, 1000);
+            } else {
+                startBtn.style.display = 'inline-block';
+                cancelBtn.style.display = 'none';
+                if (data.status === 'Completed') {
+                    statusDiv.style.color = "#4CAF50";
+                } else if (data.status === 'Cancelled') {
+                    statusDiv.style.color = "#F44336";
+                } else {
+                    statusDiv.style.color = "#F44336";
+                }
+            }
+        }
+
+        // Init
+        loadRegions();
+        pollSyncStatus();
+    </script>
+</body>
+</html>

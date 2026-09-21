@@ -1,0 +1,13 @@
+{
+  "regions": [
+    {
+      "name": "World_Base",
+      "min_lat": -85.0511,
+      "max_lat": 85.0511,
+      "min_lon": -180.0,
+      "max_lon": 180.0,
+      "min_zoom": 0,
+      "max_zoom": 6
+    }
+  ]
+}

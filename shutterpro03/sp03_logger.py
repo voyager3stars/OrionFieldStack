@@ -18,7 +18,17 @@ import time
 import exifread
 import logging
 import queue
+import threading
 from datetime import datetime
+import math
+import io
+
+def _convert_to_tilde(path_str):
+    home = os.path.expanduser('~')
+    if path_str.startswith(home):
+        return '~' + path_str[len(home):]
+    return path_str
+
 from dataclasses import dataclass
 
 # Import project utilities
@@ -294,7 +304,7 @@ def analyzer_worker(analysis_queue, stop_event, CONFIG):
                 },
                 "file": {
                     "name": shot.filename,
-                    "path": CONFIG["SAVE_DIR"],
+                    "path": _convert_to_tilde(CONFIG["SAVE_DIR"]),
                     "format": shot.file_format,
                     "size_mb": round(shot.file_size_mb, 2),
                     "width": ex["w"], "height": ex["h"]

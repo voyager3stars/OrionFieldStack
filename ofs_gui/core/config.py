@@ -8,7 +8,8 @@ SSE_PATH = os.path.join(BASE_DIR, "SSE", "SSE.py")
 STARFLUX_PATH = os.path.join(BASE_DIR, "starflux", "starflux.py")
 STARFORGE_PATH = os.path.join(BASE_DIR, "starforge", "starforge.py")
 SKYSYNC_PATH = os.path.join(BASE_DIR, "skysync", "skysync.py")
-GUI_CONFIG_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "ofs_gui_sp03_config.json")
+SHUTTERPRO_CONFIG_PATH = os.path.join(BASE_DIR, "shutterpro03", "config.json")
+GUI_CONFIG_PATH = SHUTTERPRO_CONFIG_PATH
 
 def get_sse_python():
     # Use the GUI's own python environment which is verified to have all dependencies

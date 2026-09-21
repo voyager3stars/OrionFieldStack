@@ -1,0 +1,108 @@
+[
+    {
+        "version": "1.6.2",
+        "session_id": "20260505_1340",
+        "objective": "test",
+        "equipment": {
+            "telescope": "Vixen R200SS",
+            "optics": "Telescope Corrector PH",
+            "filter": "N/A",
+            "camera": "PENTAX K-1 Mark II",
+            "aperture_mm": 200,
+            "focal_length_mm": 760,
+            "f_number": 3.8,
+            "pixel_size_um": 4.88,
+            "pixel_scale": 1.32
+        },
+        "record": {
+            "meta": {
+                "iso_timestamp": "2026-05-05T13:40:36.342+09:00",
+                "timestamp_utc": "2026-05-05T04:40:36.342Z",
+                "utc_offset": "+09:00",
+                "lst_hms": "04h44m21s",
+                "unixtime": 1777956036.342,
+                "exposure_actual_sec": 1.352,
+                "exposure_diff_sec": 0.351849,
+                "shot_mode": "bulb",
+                "frame_type": "test"
+            },
+            "file": {
+                "name": "260505_IMGP1996.DNG",
+                "path": "/home/mtorig/Pictures_test2",
+                "format": "DNG",
+                "size_mb": 36.94,
+                "width": 160,
+                "height": 120
+            },
+            "exif": {
+                "iso": 100,
+                "shutter_sec": 1.0,
+                "datetime_original": "2026:05:05 13:40:36",
+                "model": "PENTAX K-1 Mark II ",
+                "lat": 34.730685,
+                "lon": 137.869515,
+                "alt": 35.8
+            },
+            "mount": {
+                "ra_deg": 355.5458333333333,
+                "dec_deg": 77.76944444444445,
+                "ra_hms": "23h42m11s",
+                "dec_dms": "+77°46'10\"",
+                "status": "Idle",
+                "side_of_pier": "West",
+                "hour_angle": 5.035979965271476
+            },
+            "location": {
+                "site_name": "Akashi Municipal Planetarium (JST Meridian)",
+                "latitude": 34.731091667,
+                "longitude": 137.869396667,
+                "elevation": -101.2,
+                "timezone": "Asia/Tokyo",
+                "utc_offset": "+09:00",
+                "tz_source": "gps"
+            },
+            "environment": {
+                "temp_c": 22.9,
+                "humidity_pct": 57.6,
+                "pressure_hPa": 1018.4,
+                "dew_point_c": 14.4,
+                "cpu_temp_mount_c": 30.0,
+                "cpu_temp_rpi_c": 54.0
+            },
+            "analysis": {
+                "SSE": {
+                    "sse_version": null,
+                    "solve_status": "pending",
+                    "solve_path": null,
+                    "confidence": null,
+                    "timestamp": null,
+                    "solved_coords": {
+                        "ra_deg": null,
+                        "dec_deg": null,
+                        "orientation": null,
+                        "ra_hms": null,
+                        "dec_dms": null
+                    },
+                    "process_stats": {
+                        "matched_stars": null,
+                        "solve_duration_sec": null
+                    }
+                },
+                "SF": {
+                    "sf_version": null,
+                    "sf_status": "pending",
+                    "sf_timestamp": null,
+                    "quality": {
+                        "sf_stars": null,
+                        "sf_fwhm_med": null,
+                        "sf_fwhm_mean": null,
+                        "sf_fwhm_std": null,
+                        "sf_ell_med": null,
+                        "sf_ell_mean": null,
+                        "sf_ell_std": null
+                    }
+                }
+            }
+        }
+    }
+]

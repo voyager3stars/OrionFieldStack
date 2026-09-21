@@ -37,9 +37,22 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+import math
 import core.state as state
 
 from core.config import *
+
+def sanitize_json_values(obj):
+    """
+    再帰的に辞書やリストを走査し、float('nan') や float('inf') を None (JSON null) に変換する。
+    """
+    if isinstance(obj, float):
+        return obj if math.isfinite(obj) else None
+    elif isinstance(obj, dict):
+        return {k: sanitize_json_values(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [sanitize_json_values(v) for v in obj]
+    return obj
 
 # Global telemetry cache
 state.latest_telemetry = {
@@ -54,7 +67,13 @@ state.latest_telemetry = {
     "longitude": None,
     "elevation": None,
     "timestamp_utc": None,
-    "iso_timestamp": None
+    "iso_timestamp": None,
+    "temp_c": None,
+    "humidity_pct": None,
+    "pressure_hPa": None,
+    "dew_point_c": None,
+    "cpu_temp_mount_c": None,
+    "cpu_temp_rpi_c": None
 }
 
 state.latest_flashair = {
@@ -78,7 +97,7 @@ async def update_telemetry_loop():
             if proc.returncode == 0:
                 try:
                     data = json.loads(stdout.decode().strip())
-                    state.latest_telemetry = data
+                    state.latest_telemetry = sanitize_json_values(data)
                 except Exception as ex:
                     state.latest_telemetry["status"] = "PARSE_ERROR"
             else:

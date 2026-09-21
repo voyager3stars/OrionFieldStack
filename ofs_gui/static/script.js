@@ -681,6 +681,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const sfTargetFileOpt = document.getElementById('sf-target-file-opt');
     const sfForceCheckbox = document.getElementById('sf-force');
     const sfPlotCheckbox = document.getElementById('sf-plot');
+    const sfSaveBgCheckbox = document.getElementById('sf-save-bg');
+    const sfBgFormatSelect = document.getElementById('sf-bg-format');
+    const sfOutpathInput = document.getElementById('sf-outpath');
     const sfSnrInput = document.getElementById('sf-snr');
     const sfTopStarsInput = document.getElementById('sf-top-stars');
     const sfRunBtn = document.getElementById('sf-run-btn');
@@ -806,6 +809,11 @@ document.addEventListener('DOMContentLoaded', () => {
         formData.append('target_type', sfTargetSelect.value);
         formData.append('force', sfForceCheckbox.checked);
         formData.append('plot', sfPlotCheckbox.checked);
+        formData.append('save_bg', sfSaveBgCheckbox.checked);
+        formData.append('bg_format', sfBgFormatSelect.value);
+        if (sfOutpathInput.value.trim() !== '') {
+            formData.append('outpath', sfOutpathInput.value.trim());
+        }
         formData.append('snr', sfSnrInput.value);
         formData.append('top_stars', sfTopStarsInput.value);
 
@@ -1015,6 +1023,24 @@ document.addEventListener('DOMContentLoaded', () => {
                     syncFaUrlEl.style.pointerEvents = 'none';
                 }
             }
+
+            // 6. Environment
+            const envFields = [
+                { key: 'temp_c', id: 'tel-env-temp', suffix: '°C' },
+                { key: 'humidity_pct', id: 'tel-env-hum', suffix: '%' },
+                { key: 'pressure_hPa', id: 'tel-env-press', suffix: 'hPa' },
+                { key: 'dew_point_c', id: 'tel-env-dew', suffix: '°C' },
+                { key: 'cpu_temp_mount_c', id: 'tel-env-cpu-m', suffix: '°C' },
+                { key: 'cpu_temp_rpi_c', id: 'tel-env-cpu-r', suffix: '°C' }
+            ];
+
+            envFields.forEach(f => {
+                const val = (data[f.key] !== null && data[f.key] !== undefined) ? `${data[f.key]}${f.suffix}` : '--';
+                const el = document.getElementById(f.id);
+                const syncEl = document.getElementById(`sync-${f.id}`);
+                if (el) el.textContent = val;
+                if (syncEl) syncEl.textContent = val;
+            });
         } catch (e) {
             console.error('Telemetry fetch error', e);
         }
@@ -1359,6 +1385,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const sfgLimit = document.getElementById('sfg-limit');
     const sfgUseFlat = document.getElementById('sfg-use-flat');
     const sfgFlatFields = document.getElementById('sfg-flat-fields');
+    const sfgFlatMultMode = document.getElementById('sfg-flat-mult-mode');
+    const sfgFlatMultValue = document.getElementById('sfg-flat-mult-value');
     const sfgFlatDir = document.getElementById('sfg-flat-dir');
     const sfgFlatSession = document.getElementById('sfg-flat-session');
     const sfgFlatSessionList = document.getElementById('sfg-flat-session-list');
@@ -1404,6 +1432,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let sfgSessionsMap = new Map();
     let selectedSfgSessions = new Set();
     let selectedSfgFiles = new Set();
+    let seenSfgFiles = new Set();
     let sfgSelectedSessionId = null;
     let sfgSelectedFileName = null;
     let sfgFlatSessionsMap = new Map();
@@ -1430,6 +1459,16 @@ document.addEventListener('DOMContentLoaded', () => {
     sfgUseDark.onchange = toggleDarkFields;
     toggleFlatFields();
     toggleDarkFields();
+
+    const toggleFlatMultValue = () => {
+        if (sfgFlatMultMode && sfgFlatMultValue) {
+            sfgFlatMultValue.disabled = (sfgFlatMultMode.value !== 'manual');
+        }
+    };
+    if (sfgFlatMultMode) {
+        sfgFlatMultMode.onchange = toggleFlatMultValue;
+        toggleFlatMultValue();
+    }
 
     if (sfgViewDarkBtn) {
         sfgViewDarkBtn.onclick = () => {
@@ -1484,7 +1523,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             const inputFiles = [];
-            const checkedBoxes = document.querySelectorAll('.sfg-file-cb:checked');
+            const checkedBoxes = sfgFileList.querySelectorAll('input[type="checkbox"]:checked');
             checkedBoxes.forEach(cb => {
                 const fileName = cb.id.replace('sfg-file-cb-', '');
                 inputFiles.push(fileName);
@@ -1501,7 +1540,7 @@ document.addEventListener('DOMContentLoaded', () => {
             dirInput.value = logPath;
             form.appendChild(dirInput);
 
-            if (targetSession) {
+            if (targetSession && inputFiles.length === 0) {
                 const sessionInput = document.createElement('input');
                 sessionInput.type = 'hidden';
                 sessionInput.name = 'session';
@@ -1524,6 +1563,52 @@ document.addEventListener('DOMContentLoaded', () => {
                 outDirInput.name = 'out_dir';
                 outDirInput.value = outDirEl.value.trim();
                 form.appendChild(outDirInput);
+            }
+
+            // Append Flat Calibration settings
+            const useFlatEl = document.getElementById('sfg-use-flat');
+            if (useFlatEl) {
+                const useFlatInput = document.createElement('input');
+                useFlatInput.type = 'hidden';
+                useFlatInput.name = 'use_flat';
+                useFlatInput.value = useFlatEl.checked ? 'true' : 'false';
+                form.appendChild(useFlatInput);
+            }
+
+            const flatMultModeEl = document.getElementById('sfg-flat-mult-mode');
+            if (flatMultModeEl) {
+                const input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = 'flat_mult_mode';
+                input.value = flatMultModeEl.value;
+                form.appendChild(input);
+            }
+
+            const flatMultValueEl = document.getElementById('sfg-flat-mult-value');
+            if (flatMultValueEl) {
+                const input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = 'flat_mult_value';
+                input.value = flatMultValueEl.value;
+                form.appendChild(input);
+            }
+
+            const flatDirEl = document.getElementById('sfg-flat-dir');
+            if (flatDirEl && flatDirEl.value.trim()) {
+                const flatDirInput = document.createElement('input');
+                flatDirInput.type = 'hidden';
+                flatDirInput.name = 'flat_dir';
+                flatDirInput.value = flatDirEl.value.trim();
+                form.appendChild(flatDirInput);
+            }
+
+            const flatSessionEl = document.getElementById('sfg-flat-session');
+            if (flatSessionEl && flatSessionEl.value.trim()) {
+                const flatSessionInput = document.createElement('input');
+                flatSessionInput.type = 'hidden';
+                flatSessionInput.name = 'flat_session';
+                flatSessionInput.value = flatSessionEl.value.trim();
+                form.appendChild(flatSessionInput);
             }
 
             document.body.appendChild(form);
@@ -1664,6 +1749,7 @@ document.addEventListener('DOMContentLoaded', () => {
         sfgFileList.innerHTML = '<div class="placeholder">Waiting...</div>';
         selectedSfgSessions.clear();
         selectedSfgFiles.clear();
+        seenSfgFiles.clear();
         sfgSessionsMap.clear();
 
         try {
@@ -1742,7 +1828,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (selectedRecords.length === 0) {
             sfgFileList.innerHTML = '<div class="placeholder">Select sessions first</div>';
-            selectedSfgFiles.clear();
             drawHistogram();
             return;
         }
@@ -1752,8 +1837,6 @@ document.addEventListener('DOMContentLoaded', () => {
             const tb = b.record?.meta?.iso_timestamp || '';
             return ta.localeCompare(tb);
         });
-
-        selectedSfgFiles.clear();
 
         selectedRecords.forEach(record => {
             const fileName = record.record?.file?.name || 'Unknown';
@@ -1767,8 +1850,11 @@ document.addEventListener('DOMContentLoaded', () => {
             const cb = document.createElement('input');
             cb.type = 'checkbox';
             cb.id = `sfg-file-cb-${fileName}`;
-            cb.checked = true; // default select all
-            selectedSfgFiles.add(fullPath);
+            if (!seenSfgFiles.has(fullPath)) {
+                seenSfgFiles.add(fullPath);
+                selectedSfgFiles.add(fullPath);
+            }
+            cb.checked = selectedSfgFiles.has(fullPath);
             cb.onclick = (e) => e.stopPropagation();
             cb.onchange = () => {
                 if (cb.checked) selectedSfgFiles.add(fullPath);
@@ -1848,8 +1934,16 @@ document.addEventListener('DOMContentLoaded', () => {
         const checkboxes = sfgFileList.querySelectorAll('input[type="checkbox"]');
         checkboxes.forEach(cb => {
             cb.checked = false;
+            const fileName = cb.id.replace('sfg-file-cb-', '');
+            for (const records of sfgSessionsMap.values()) {
+                const r = records.find(x => x.record?.file?.name === fileName);
+                if (r) {
+                    const fullPath = r.record?.file?.path ? `${r.record.file.path}/${fileName}` : fileName;
+                    selectedSfgFiles.delete(fullPath);
+                    break;
+                }
+            }
         });
-        selectedSfgFiles.clear();
         drawHistogram();
     };
 
@@ -1886,6 +1980,8 @@ document.addEventListener('DOMContentLoaded', () => {
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
             ctx.fillText('No ellipticity data available', width / 2, height / 2);
+            if (typeof drawFwhmHistogram === 'function') drawFwhmHistogram();
+            if (typeof drawBgHistogram === 'function') drawBgHistogram();
             return;
         }
 
@@ -2436,6 +2532,12 @@ document.addEventListener('DOMContentLoaded', () => {
         if (sfgUseFlat.checked) {
             formData.append('flat_dir', sfgFlatDir.value);
             formData.append('flat_session', sfgFlatSession.value);
+            if (sfgFlatMultMode) {
+                formData.append('flat_mult_mode', sfgFlatMultMode.value);
+            }
+            if (sfgFlatMultValue) {
+                formData.append('flat_mult_value', sfgFlatMultValue.value);
+            }
         }
 
         formData.append('use_dark', sfgUseDark.checked ? 'true' : 'false');

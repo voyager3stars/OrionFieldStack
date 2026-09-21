@@ -2,6 +2,7 @@ import os
 import json
 import io
 import rawpy
+import re
 from PIL import Image
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse, StreamingResponse
@@ -19,6 +20,15 @@ async def browse_logs(path: str):
     try:
         with open(log_file, "r") as f:
             data = json.load(f, parse_constant=lambda x: None)
+            
+        for record in data:
+            if "record" in record and "file" in record["record"]:
+                file_path = record["record"]["file"].get("path", "")
+                if file_path:
+                    m = re.match(r"^/(?:home|Users)/[^/]+/(.*)$", file_path)
+                    if m:
+                        record["record"]["file"]["path"] = "~/" + m.group(1)
+                        
         return data
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error reading log: {str(e)}")
@@ -37,12 +47,13 @@ async def get_image(path: str):
             with rawpy.imread(full_path) as raw:
                 try:
                     thumb = raw.extract_thumb()
-                except (rawpy.LibRawNoThumbnailError, AttributeError):
+                except (rawpy.LibRawError, AttributeError):
                     thumb = None
 
                 if thumb:
                     if thumb.format == rawpy.ThumbFormat.JPEG:
-                        return StreamingResponse(io.BytesIO(thumb.data), media_type="image/jpeg")
+                        thumb_data = thumb.data.tobytes() if hasattr(thumb.data, 'tobytes') else bytes(thumb.data)
+                        return StreamingResponse(io.BytesIO(thumb_data), media_type="image/jpeg")
                     else:
                         img = Image.fromarray(thumb.data)
                 else:

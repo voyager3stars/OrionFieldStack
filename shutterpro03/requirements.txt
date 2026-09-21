@@ -1,4 +1,0 @@
-exifread
-pyindi-client
-numpy<1.27.0,>=1.19.5
-timezonefinder

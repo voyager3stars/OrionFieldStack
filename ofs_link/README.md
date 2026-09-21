@@ -1,4 +1,4 @@
-# 🔗 ofs_link v1.0.0 - Telemetry Linker
+# 🔗 ofs_link v1.1 - Telemetry Linker
 
 `ofs_link` は、INDI サーバーおよび GPSD から、望遠鏡架台（マウント）のステータス、赤経・赤緯、ピアーサイド、GPS位置情報、および高精度なタイムスタンプ情報を取得し、標準化された JSON 形式で出力する CUI ユーティリティです。
 
@@ -24,19 +24,9 @@ OrionFieldStack システムの各コンポーネントにおける「現在位�
 
 ## ⚙️ インストールとセットアップ
 
-### 1. 仮想環境の作成とライブラリインストール
-プログラムが存在するディレクトリに移動し、専用の仮想環境を作成して依存関係をインストールします。
-
-```bash
-cd OrionFieldStack/ofs_link
-
-# 仮想環境の作成
-python3 -m venv venv
-source venv/bin/activate
-
-# 依存ライブラリのインストール
-pip install -r requirements.txt
-```
+### 1. セットアップ
+本モジュールの依存パッケージは、プロジェクトルートの `requirements.txt` で一括管理されています。
+セットアップ方法は [プロジェクトルートの README](../README.md) を参照してください。
 
 ### 2. 実行権限の付与
 ```bash
@@ -75,12 +65,20 @@ chmod +x ofs_link.py
   "status": "TRACKING",
   "ra_deg": 83.81020833,
   "dec_deg": -5.38966667,
+  "ra_str": "05h35m14s",
+  "dec_str": "-05°23'23\"",
   "side_of_pier": "EAST",
   "latitude": 34.6493,
   "longitude": 135.0015,
   "elevation": 54.0,
   "timestamp_utc": "2026-06-21T06:55:01.000Z",
-  "iso_timestamp": "2026-06-21T15:55:01.000+09:00"
+  "iso_timestamp": "2026-06-21T15:55:01.000+09:00",
+  "temp_c": 25.9,
+  "humidity_pct": 55.6,
+  "pressure_hPa": 1010.0,
+  "dew_point_c": 17.0,
+  "cpu_temp_mount_c": 38.0,
+  "cpu_temp_rpi_c": 45.2
 }
 ```
 
@@ -90,12 +88,20 @@ chmod +x ofs_link.py
 | **`status`** | String | 架台の現在の動作ステータス (`TRACKING` / `SLEWING` / `IDLE` / `ALERT` / `UNKNOWN`) |
 | **`ra_deg`** | Float / null | 現在の赤経 (Right Ascension) を度数法 (0.0〜360.0) で表現した値。取得失敗時は `null`。 |
 | **`dec_deg`** | Float / null | 現在の赤緯 (Declination) を度数法 (-90.0〜90.0) で表現した値。取得失敗時は `null`。 |
+| **`ra_str`** | String / null | `ra_deg` を `XXhXXmXXs` 形式の文字列にフォーマットした値 |
+| **`dec_str`** | String / null | `dec_deg` を `±XX°XX'XX"` 形式の文字列にフォーマットした値 |
 | **`side_of_pier`** | String | 望遠鏡のピアーサイド状態 (`EAST` / `WEST` / `UNKNOWN`) |
 | **`latitude`** | Float / null | 観測地の緯度（Decimal度数）。GPS失敗時は `config.json` のデフォルト値。 |
 | **`longitude`** | Float / null | 観測地の経度（Decimal度数）。GPS失敗時は `config.json` のデフォルト値。 |
 | **`elevation`** | Float / null | 観測地の標高/高度 (メートル)。GPS失敗時は `config.json` のデフォルト値。 |
 | **`timestamp_utc`** | String | 取得時刻 ofs_link の UTC タイムスタンプ (ISO 8601, `YYYY-MM-DDTHH:MM:SS.fffZ`) |
 | **`iso_timestamp`** | String | 観測地のタイムゾーンを考慮した高精度ローカルタイムスタンプ (オフセット付き) |
+| **`temp_c`** | Float / null | 観測地の気温/マウント温度（摂氏） |
+| **`humidity_pct`** | Float / null | 観測地の相対湿度（%） |
+| **`pressure_hPa`** | Float / null | 観測地の気圧（hPa） |
+| **`dew_point_c`** | Float / null | 露点温度（摂氏） |
+| **`cpu_temp_mount_c`** | Float / null | マウント内蔵コンピュータのCPU温度（摂氏） |
+| **`cpu_temp_rpi_c`** | Float / null | Raspberry Pi（システム）のCPU温度（摂氏） |
 
 ### 2. `--flashair` 実行時
 `--flashair` を実行した際に出力される JSON データの各項目は以下の通りです。
@@ -135,6 +141,19 @@ chmod +x ofs_link.py
 *   `PROP_GEO`: 観測地情報を取得するプロパティ名。
 *   `LAST_LATITUDE` / `LAST_LONGITUDE` / `LAST_ELEVATION`: GPSオフライン時に適用されるフォールバック用の緯度・経度・高度情報。
 *   `FLASHAIR_URL`: FlashAirカードのベースURL。省略時は `http://192.168.50.200` が適用されます。
+
+---
+
+---
+
+## 📜 更新履歴
+
+*   **v1.1** (2026-09-04)
+    *   環境情報（気温 `temp_c`、湿度 `humidity_pct`、気圧 `pressure_hPa`、露点 `dew_point_c`、マウントCPU温度 `cpu_temp_mount_c`）の取得を追加
+    *   システム（Raspberry Pi等）のCPU温度 `cpu_temp_rpi_c` 取得を追加
+    *   出力JSONに `ra_str` および `dec_str` を追加
+*   **v1.0** (2026-06-21)
+    *   初期リリース
 
 ---
 
