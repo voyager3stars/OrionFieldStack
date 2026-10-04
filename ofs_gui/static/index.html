@@ -70,7 +70,7 @@
                                     <div class="form-group full-width">
                                         <label for="save_dir">Save Directory</label>
                                         <div class="input-with-button">
-                                            <input type="text" id="save_dir" name="save_dir" value="~/Pictures">
+                                            <input type="text" id="save_dir" name="save_dir">
                                             <button type="button" id="browse-dir-btn" class="btn-small">Browse</button>
                                         </div>
                                     </div>
@@ -183,6 +183,10 @@
                                         <span class="telemetry-label">UTC</span>
                                         <span id="tel-time-utc" class="telemetry-val monospace">--:--:--</span>
                                     </div>
+                                    <div class="telemetry-row">
+                                        <span class="telemetry-label">Source</span>
+                                        <span id="tel-time-source" class="telemetry-val badge">N/A</span>
+                                    </div>
                                 </div>
 
                                 <!-- GPS -->
@@ -195,6 +199,10 @@
                                     <div class="telemetry-row">
                                         <span class="telemetry-label">Elev</span>
                                         <span id="tel-gps-elev" class="telemetry-val monospace">N/A</span>
+                                    </div>
+                                    <div class="telemetry-row">
+                                        <span class="telemetry-label">GPSD</span>
+                                        <span id="tel-gps-status" class="telemetry-val badge">N/A</span>
                                     </div>
                                 </div>
 
@@ -300,7 +308,7 @@
                     <aside class="col-sessions">
                         <div class="col-header-rich">
                             <div class="input-with-button">
-                                <input type="text" id="log-path" value="../shutterpro03" placeholder="Log Folder">
+                                <input type="text" id="log-path" placeholder="Log Folder">
                                 <button type="button" id="browse-log-path-btn" class="btn-small">Browse</button>
                             </div>
                             <button type="button" id="load-logs-btn" class="btn-primary-small">Load Logs</button>
@@ -489,7 +497,7 @@
                                 <div class="form-group-compact">
                                     <label for="sfg-out-dir" style="min-width: unset; width: 45px;">Out Dir</label>
                                     <div class="input-with-button" style="flex-grow: 1; gap: 4px;">
-                                        <input type="text" id="sfg-out-dir" name="out_dir" value="./output"
+                                        <input type="text" id="sfg-out-dir" name="out_dir" placeholder="./output"
                                             style="width: 100%; padding: 4px 6px;">
                                         <button type="button" id="browse-sfg-out-dir-btn" class="btn-small"
                                             style="padding: 4px 8px;">Browse</button>
@@ -556,7 +564,7 @@
                             <div class="col-header-rich"
                                 style="padding: 0 0 6px 0; border-bottom: 1px solid var(--glass-border); display: flex; flex-direction: row; gap: 6px; align-items: center;">
                                 <div class="input-with-button" style="width: 100%; gap: 4px;">
-                                    <input type="text" id="sfg-log-path" value="../shutterpro03"
+                                    <input type="text" id="sfg-log-path" placeholder="Log Folder"
                                         placeholder="Log Folder"
                                         style="width: 100%; padding: 4px 8px; font-size: 0.75rem;">
                                     <button type="button" id="browse-sfg-log-path-btn" class="btn-small"
@@ -852,7 +860,7 @@
                                     <div class="form-group full-width">
                                         <label for="sync-save-dir">Save Directory</label>
                                         <div class="input-with-button">
-                                            <input type="text" id="sync-save-dir" name="save_dir" value="~/Pictures/sync">
+                                            <input type="text" id="sync-save-dir" name="save_dir" placeholder="~/Pictures/sync">
                                             <button type="button" id="browse-sync-dir-btn" class="btn-small">Browse</button>
                                         </div>
                                     </div>
@@ -933,6 +941,10 @@
                                         <span class="telemetry-label">UTC</span>
                                         <span id="sync-tel-time-utc" class="telemetry-val monospace">--:--:--</span>
                                     </div>
+                                    <div class="telemetry-row">
+                                        <span class="telemetry-label">Source</span>
+                                        <span id="sync-tel-time-source" class="telemetry-val badge">N/A</span>
+                                    </div>
                                 </div>
 
                                 <!-- GPS -->
@@ -945,6 +957,10 @@
                                     <div class="telemetry-row">
                                         <span class="telemetry-label">Elev</span>
                                         <span id="sync-tel-gps-elev" class="telemetry-val monospace">N/A</span>
+                                    </div>
+                                    <div class="telemetry-row">
+                                        <span class="telemetry-label">GPSD</span>
+                                        <span id="sync-tel-gps-status" class="telemetry-val badge">N/A</span>
                                     </div>
                                 </div>
 
@@ -1045,7 +1061,7 @@
             <div class="modal-body">
                 <div class="path-nav">
                     <button type="button" id="picker-up-btn" class="btn-small">UP</button>
-                    <div id="picker-current-path" class="current-path">/home/mtorig</div>
+                    <div id="picker-current-path" class="current-path">~</div>
                 </div>
                 <div id="picker-list" class="folder-list"></div>
             </div>

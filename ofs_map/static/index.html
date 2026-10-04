@@ -12,34 +12,80 @@
      
     <!-- Leaflet.draw CSS -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css" />
-
+    
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/css/style.css">
 </head>
 <body>
 
-    <div id="map"></div>
+    <header class="ofs-header">
+        <div class="header-main">
+            <h1>OrionFieldStack <span class="v-tag">map viewer</span></h1>
+        </div>
+    </header>
 
-    <div class="overlay-panel">
-        <h3>Telemetries</h3>
-        <div class="info-row">
-            <span class="info-label">GPS Status:</span>
-            <span class="info-value" id="gps-status">Connecting...</span>
+    <div class="content-wrapper">
+        <div class="left-panel">
+            <div id="map"></div>
         </div>
-        <div class="info-row">
-            <span class="info-label">Latitude:</span>
-            <span class="info-value" id="lat">---</span>
+    
+        <div class="right-half">
+            <div class="gps-map-container">
+                <h3>GPS Map</h3>
+                <div id="sat-map" style="flex-grow: 1; min-height: 200px; width: 100%; border-radius: 4px; border: 1px solid #444; background: #c8c8c8; z-index: 1;"></div>
+            </div>
+            
+            <div class="bottom-info-container">
+                <div class="telemetry-panel">
+                    <h3>Telemetries</h3>
+                    <div class="info-row">
+                        <span class="info-label">GPS Status:</span>
+                        <span class="info-value" id="gps-status">Connecting...</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Latitude:</span>
+                        <span class="info-value" id="lat">---</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Longitude:</span>
+                        <span class="info-value" id="lon">---</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Zoom Level:</span>
+                        <span class="info-value" id="zoom-level">5</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Time (UTC):</span>
+                        <span class="info-value" id="time-utc">---</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Time Source:</span>
+                        <span class="info-value" id="time-source">---</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Sys/PPS Offset:</span>
+                        <span class="info-value" id="time-offset">---</span>
+                    </div>
+                    
+                    <div id="manual-location-container" style="display: none; margin-top: 15px; margin-bottom: 15px; padding: 10px; background: rgba(255,255,255,0.05); border-radius: 4px; border: 1px dashed #666;">
+                        <div style="font-size: 13px; margin-bottom: 8px; color: #aaa;">Selected: <span id="selected-coords">---</span></div>
+                        <button id="set-location-btn" class="btn-primary" style="width: 100%; padding: 8px; font-size: 13px; background-color: #4CAF50; border: none; border-radius: 4px; color: white; cursor: pointer;">現在地として登録</button>
+                    </div>
+                </div>
+
+                <div class="satellite-panel">
+                    <h3>GPS Satellites</h3>
+                    <div id="satellite-list" class="satellite-list">
+                        <div class="sat-placeholder">Waiting for satellite data...</div>
+                    </div>
+                    
+                    <div class="panel-bottom-actions">
+                        <a href="/admin" class="admin-link">⚙️ Map Area Manager</a>
+                        <button id="download-btn" class="download-btn">📥 Download Map Data</button>
+                    </div>
+                </div>
+            </div>
         </div>
-        <div class="info-row">
-            <span class="info-label">Longitude:</span>
-            <span class="info-value" id="lon">---</span>
-        </div>
-        <div class="info-row">
-            <span class="info-label">Zoom Level:</span>
-            <span class="info-value" id="zoom-level">5</span>
-        </div>
-        
-        <a href="/admin" class="admin-link">⚙️ Map Area Manager</a>
-        <button id="download-btn" class="download-btn">📥 Download Map Data</button>
     </div>
 
     <!-- Modal for Download Options -->
@@ -47,15 +93,15 @@
         <div class="modal-content">
             <span class="close-btn" id="close-modal">&times;</span>
             <h2>Download Current Area</h2>
-            <p>Select the maximum zoom level to download for the current screen area (Zoom 7 to Max).</p>
+            <p>Select the maximum zoom level to download for the current screen area (Zoom 2 to Max).</p>
             
             <div style="margin-top: 15px; margin-bottom: 15px;">
                 <label for="max-zoom-select" style="font-weight: bold;">Max Zoom Level: <span id="zoom-val-display">12</span></label>
-                <input type="range" id="max-zoom-select" min="7" max="19" value="12" style="width: 100%; margin-top: 10px;">
+                <input type="range" id="max-zoom-select" min="2" max="17" value="12" style="width: 100%; margin-top: 10px;">
                 <div style="display: flex; justify-content: space-between; font-size: 12px; color: #aaa;">
-                    <span>7 (Wide)</span>
+                    <span>2 (Wide)</span>
                     <span>14 (Medium)</span>
-                    <span>19 (Detailed)</span>
+                    <span>17 (Detailed)</span>
                 </div>
             </div>
             

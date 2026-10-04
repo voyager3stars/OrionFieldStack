@@ -163,7 +163,7 @@ StarFluxは、解析対象と同じディレクトリにある `shutter_log.json
         "sf_status": "success",
         "sf_timestamp": "2026-06-28T23:12:37",
         "bg_image": {
-            "path": "/home/mtorig/Pictures",
+            "path": "~/Pictures",
             "name": "IMG_1234_bg_image.npz"
         },
         "quality": {

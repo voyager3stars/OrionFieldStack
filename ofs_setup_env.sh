@@ -6,11 +6,7 @@ echo "=========================================="
 echo " OrionFieldStack 環境構築スクリプト"
 echo "=========================================="
 
-echo "[1/3] システム依存ライブラリのインストール..."
-sudo apt-get update
-sudo apt-get install -y libdbus-1-dev libglib2.0-dev
-
-echo "[2/3] Python仮想環境の作成..."
+echo "[1/2] Python仮想環境の作成..."
 if [ ! -d "venv" ]; then
     python3 -m venv venv
     echo "仮想環境 'venv' を作成しました。"
@@ -21,7 +17,7 @@ fi
 # 仮想環境のアクティベート
 source venv/bin/activate
 
-echo "[3/3] Python依存パッケージのインストール..."
+echo "[2/2] Python依存パッケージのインストール..."
 pip install -U pip
 pip install -r requirements.txt
 

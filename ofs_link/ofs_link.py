@@ -140,30 +140,121 @@ def check_flashair(base_url, timeout=3.0):
         pass
     return False
 
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+SHUTTERPRO_CONFIG_PATH = os.path.abspath(os.path.join(SCRIPT_DIR, "..", "shutterpro03", "config.json"))
+
+# 位置情報の保存先（OFS全体で唯一の保存場所）
+LOCATION_PATH = os.path.expanduser("~/.local/share/ofs/location.json")
+DEFAULT_LOCATION = {
+    "latitude": 34.6493,
+    "longitude": 135.0015,
+    "elevation": 54.0,
+    "source": "default",
+    "updated_at": None
+}
+
+def _write_location_file(data):
+    """location.json をアトミックに書き込む"""
+    os.makedirs(os.path.dirname(LOCATION_PATH), exist_ok=True)
+    tmp_path = LOCATION_PATH + ".tmp"
+    with open(tmp_path, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=4)
+    os.replace(tmp_path, LOCATION_PATH)
+
+def _migrate_legacy_location():
+    """
+    旧形式（shutterpro03/config.json の SYSTEM.LAST_*）から位置情報を移行する。
+    移行できた場合は保存したデータを、できなかった場合は None を返す。
+    """
+    try:
+        if os.path.exists(SHUTTERPRO_CONFIG_PATH):
+            with open(SHUTTERPRO_CONFIG_PATH, "r", encoding="utf-8") as f:
+                system = json.load(f).get("SYSTEM", {})
+            lat = safe_float(system.get("LAST_LATITUDE"))
+            lon = safe_float(system.get("LAST_LONGITUDE"))
+            if lat is not None and lon is not None:
+                elev = safe_float(system.get("LAST_ELEVATION"))
+                return save_location(lat, lon, elev, source="migrated")
+    except Exception:
+        pass
+    return None
+
+def load_location():
+    """
+    保存済みの位置情報を返す。
+    ファイルが無い場合は旧設定から移行を試み、それも無ければデフォルト値を返す。
+    """
+    if os.path.exists(LOCATION_PATH):
+        try:
+            with open(LOCATION_PATH, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            lat = safe_float(data.get("latitude"))
+            lon = safe_float(data.get("longitude"))
+            if lat is not None and lon is not None:
+                elev = safe_float(data.get("elevation"))
+                return {
+                    "latitude": lat,
+                    "longitude": lon,
+                    "elevation": elev if elev is not None else DEFAULT_LOCATION["elevation"],
+                    "source": data.get("source", "manual"),
+                    "updated_at": data.get("updated_at")
+                }
+        except Exception:
+            pass
+        return dict(DEFAULT_LOCATION)
+
+    migrated = _migrate_legacy_location()
+    if migrated:
+        return migrated
+    return dict(DEFAULT_LOCATION)
+
+def save_location(lat, lon, elevation=None, source="manual"):
+    """
+    位置情報を保存する。elevation 省略時は既存の値を維持する。
+    """
+    lat = safe_float(lat)
+    lon = safe_float(lon)
+    if lat is None or lon is None or not (-90 <= lat <= 90) or not (-180 <= lon <= 180):
+        raise ValueError(f"Invalid coordinates: lat={lat}, lon={lon}")
+
+    elev = safe_float(elevation)
+    if elev is None and os.path.exists(LOCATION_PATH):
+        try:
+            with open(LOCATION_PATH, "r", encoding="utf-8") as f:
+                elev = safe_float(json.load(f).get("elevation"))
+        except Exception:
+            pass
+    if elev is None:
+        elev = DEFAULT_LOCATION["elevation"]
+
+    data = {
+        "latitude": lat,
+        "longitude": lon,
+        "elevation": elev,
+        "source": source,
+        "updated_at": datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
+    }
+    _write_location_file(data)
+    return data
+
 def load_config(config_path_arg=None):
     """
-    config.jsonの読み込み。優先順位：
+    設定（INDIデバイス名等）の読み込み。優先順位：
     1. --config で指定されたファイルパス
-    2. 自身のスクリプトと同じディレクトリの config.json
-    3. 親ディレクトリの ../shutterpro03/config.json
+    2. ../shutterpro03/config.json
+    ※ 位置情報は config ではなく location.json（load_location）で管理する
     """
     config = {
         "INDI_MOUNT": "LX200 OnStep",
         "PROP_COORD": "EQUATORIAL_EOD_COORD",
         "PROP_GEO": "GEOGRAPHIC_COORD",
-        "LAST_LATITUDE": 34.6493,
-        "LAST_LONGITUDE": 135.0015,
-        "LAST_ELEVATION": 54.0,
         "FLASHAIR_URL": "http://192.168.50.200"
     }
     
     paths_to_try = []
     if config_path_arg:
         paths_to_try.append(os.path.abspath(config_path_arg))
-        
-    current_dir = os.path.dirname(os.path.abspath(__file__))
-    paths_to_try.append(os.path.join(current_dir, "config.json"))
-    paths_to_try.append(os.path.abspath(os.path.join(current_dir, "../shutterpro03/config.json")))
+    paths_to_try.append(SHUTTERPRO_CONFIG_PATH)
     
     for path in paths_to_try:
         if os.path.exists(path):
@@ -176,11 +267,7 @@ def load_config(config_path_arg=None):
                     
                     for k in config.keys():
                         if k in target_dict:
-                            if k in ["LAST_LATITUDE", "LAST_LONGITUDE", "LAST_ELEVATION"]:
-                                sf = safe_float(target_dict[k])
-                                config[k] = sf if sf is not None else target_dict[k]
-                            else:
-                                config[k] = target_dict[k]
+                            config[k] = target_dict[k]
                 break
             except:
                 pass
@@ -205,7 +292,7 @@ def get_prop(device, property_name, element_name):
 
 def get_gps_data(timeout=1.5):
     """
-    gpspipe -w コマンドを呼び出して GPSD から TPV データを取得する
+    gpspipe -w コマンドを呼び出して GPSD から TPV と SKY データを取得する
     """
     try:
         proc = subprocess.Popen(
@@ -217,8 +304,12 @@ def get_gps_data(timeout=1.5):
         
         start_time = time.monotonic()
         tpv_data = None
+        sky_data = None
         
         while time.monotonic() - start_time < timeout:
+            if tpv_data and sky_data:
+                break
+                
             r, _, _ = select.select([proc.stdout], [], [], 0.1)
             if proc.stdout in r:
                 line = proc.stdout.readline()
@@ -228,15 +319,16 @@ def get_gps_data(timeout=1.5):
                     data = json.loads(line.strip())
                     if data.get("class") == "TPV":
                         tpv_data = data
-                        break
+                    elif data.get("class") == "SKY":
+                        sky_data = data
                 except ValueError:
                     pass
         
         proc.terminate()
         proc.wait(timeout=0.2)
-        return tpv_data
+        return tpv_data, sky_data
     except Exception:
-        return None
+        return None, None
 
 def get_local_timestamp(dt_utc, lat, lon):
     """
@@ -263,8 +355,24 @@ def main():
     parser.add_argument("--mock", action="store_true", help="Return mock data for testing")
     parser.add_argument("--config", type=str, help="Path to config.json file")
     parser.add_argument("--flashair", action="store_true", help="Check FlashAir connection status")
+    parser.add_argument("--get-location", action="store_true", help="Print saved location (location.json) in JSON format")
+    parser.add_argument("--set-location", nargs=2, type=float, metavar=("LAT", "LON"), help="Save location to location.json")
+    parser.add_argument("--elevation", type=float, help="Elevation in meters (used with --set-location)")
     
     args = parser.parse_args()
+    
+    if args.set_location:
+        try:
+            saved = save_location(args.set_location[0], args.set_location[1], args.elevation, source="manual")
+            print(json.dumps(saved, indent=2))
+            sys.exit(0)
+        except Exception as e:
+            print(json.dumps({"error": str(e)}), file=sys.stderr)
+            sys.exit(1)
+            
+    if args.get_location:
+        print(json.dumps(load_location(), indent=2))
+        sys.exit(0)
     
     if not args.get and not args.flashair:
         parser.print_help()
@@ -301,6 +409,8 @@ def main():
             "latitude": 34.6493,
             "longitude": 135.0015,
             "elevation": 54.0,
+            "gpsd_status": "enable",
+            "time_source": "gpsd",
             "timestamp_utc": "2026-06-21T06:55:01.000Z",
             "iso_timestamp": "2026-06-21T15:55:01.000+09:00",
             "temp_c": 25.9,
@@ -308,7 +418,12 @@ def main():
             "pressure_hPa": 1010.0,
             "dew_point_c": 17.0,
             "cpu_temp_mount_c": 38.0,
-            "cpu_temp_rpi_c": 45.2
+            "cpu_temp_rpi_c": 45.2,
+            "satellites": [
+                {"PRN": 1, "el": 45, "az": 120, "ss": 42, "used": True},
+                {"PRN": 2, "el": 30, "az": 210, "ss": 35, "used": True},
+                {"PRN": 3, "el": 15, "az": 45, "ss": 20, "used": False}
+            ]
         }
         print(json.dumps(mock_data, indent=2))
         sys.exit(0)
@@ -320,12 +435,14 @@ def main():
     prop_geo = config["PROP_GEO"]
     
     # --- 1. GPSD から位置情報・時間情報の取得 ---
-    gps_tpv = get_gps_data()
+    gps_tpv, gps_sky = get_gps_data()
     
     latitude = None
     longitude = None
     elevation = None
     dt_utc = None
+    gpsd_status = "enable"
+    time_source = "gpsd"
     
     if gps_tpv:
         latitude = safe_float(gps_tpv.get("lat"))
@@ -341,17 +458,23 @@ def main():
             except:
                 pass
  
-    # GPSから位置情報が取得できない場合は設定ファイルのデフォルト値（前回値）にフォールバック
+    # GPSから位置情報が取得できない場合は保存済み位置（location.json）にフォールバック
+    saved_location = None
     if latitude is None or longitude is None:
-        latitude = safe_float(config.get("LAST_LATITUDE"))
-        longitude = safe_float(config.get("LAST_LONGITUDE"))
+        saved_location = load_location()
+        latitude = saved_location["latitude"]
+        longitude = saved_location["longitude"]
+        gpsd_status = "disable"
         
     if elevation is None:
-        elevation = safe_float(config.get("LAST_ELEVATION"))
+        if saved_location is None:
+            saved_location = load_location()
+        elevation = saved_location["elevation"]
         
     # 時間情報が取得できない場合はシステム現在時間（UTC）を使用
     if dt_utc is None:
         dt_utc = datetime.now(timezone.utc)
+        time_source = "system"
         
     # 各種タイムスタンプ文字列の構築
     timestamp_utc = dt_utc.strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3] + "Z"
@@ -472,6 +595,8 @@ def main():
         "latitude": safe_float(latitude, 6),
         "longitude": safe_float(longitude, 6),
         "elevation": safe_float(elevation, 1),
+        "gpsd_status": gpsd_status,
+        "time_source": time_source,
         "timestamp_utc": timestamp_utc,
         "iso_timestamp": iso_timestamp,
         "temp_c": temp_c,
@@ -479,7 +604,8 @@ def main():
         "pressure_hPa": pressure_hPa,
         "dew_point_c": dew_point_c,
         "cpu_temp_mount_c": cpu_temp_mount_c,
-        "cpu_temp_rpi_c": cpu_temp_rpi_c
+        "cpu_temp_rpi_c": cpu_temp_rpi_c,
+        "satellites": gps_sky.get("satellites", []) if gps_sky else []
     }
     
     print(json.dumps(result_data, indent=2, allow_nan=False))

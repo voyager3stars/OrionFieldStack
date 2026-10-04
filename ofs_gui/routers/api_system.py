@@ -2,7 +2,7 @@ import os
 import json
 from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException, Request
-from core.config import GUI_CONFIG_PATH, SHUTTERPRO_CONFIG_PATH
+from core.config import GUI_CONFIG_PATH, SHUTTERPRO_CONFIG_PATH, OFS_GUI_CONFIG_PATH
 import core.state as state
 
 router = APIRouter()
@@ -54,8 +54,8 @@ async def get_telemetry(mock: bool = False):
 async def load_config():
     flat = {}
     config_path = SHUTTERPRO_CONFIG_PATH
-    if os.path.exists(config_path):
-        try:
+    try:
+        if os.path.exists(config_path):
             with open(config_path, "r", encoding="utf-8") as f:
                 raw_config = json.load(f)
 
@@ -84,60 +84,36 @@ async def load_config():
             flat["weather"] = system.get("INDI_WEATHER", "")
             flat["display"] = system.get("DISPLAY_MODE", "full")
             flat["log_dest"] = system.get("LOG_DEST", "s2save")
+        
+        # GUI specific defaults
+        if "save_dir" not in flat: flat["save_dir"] = "~/Pictures"
+        if "log-path" not in flat: flat["log-path"] = "../shutterpro03"
+        if "sfg-out-dir" not in flat: flat["sfg-out-dir"] = "./output"
+        if "sfg-log-path" not in flat: flat["sfg-log-path"] = "../shutterpro03"
+        if "sfg-flat-dir" not in flat: flat["sfg-flat-dir"] = ""
+        if "sfg-dark-dir" not in flat: flat["sfg-dark-dir"] = ""
+        if "sf-outpath" not in flat: flat["sf-outpath"] = ""
+        if "sync-save-dir" not in flat: flat["sync-save-dir"] = "~/Pictures/sync"
 
-            return flat
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Load error: {e}")
-    return flat
+        # Override with gui config if exists
+        if os.path.exists(OFS_GUI_CONFIG_PATH):
+            with open(OFS_GUI_CONFIG_PATH, "r", encoding="utf-8") as f:
+                gui_flat = json.load(f)
+                flat.update(gui_flat)
+
+        return flat
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Load error: {e}")
 
 @router.post("/api/config/save")
 async def save_config(request: Request):
     try:
         flat_data = await request.json()
-        raw_config = {}
-        config_path = SHUTTERPRO_CONFIG_PATH
-        if os.path.exists(config_path):
-            with open(config_path, "r", encoding="utf-8") as f:
-                raw_config = json.load(f)
-
-        if "SYSTEM" not in raw_config: raw_config["SYSTEM"] = {}
-        if "CONTEXT" not in raw_config: raw_config["CONTEXT"] = {}
-        if "EQUIPMENT" not in raw_config: raw_config["EQUIPMENT"] = {}
-
-        # Update SYSTEM
-        if "save_dir" in flat_data and flat_data["save_dir"] != "":
-            raw_config["SYSTEM"]["SAVE_DIR"] = flat_data["save_dir"]
-        if "mount" in flat_data: raw_config["SYSTEM"]["INDI_MOUNT"] = flat_data["mount"]
-        if "weather" in flat_data: raw_config["SYSTEM"]["INDI_WEATHER"] = flat_data["weather"]
-        if "display" in flat_data: raw_config["SYSTEM"]["DISPLAY_MODE"] = flat_data["display"]
-        if "log_dest" in flat_data: raw_config["SYSTEM"]["LOG_DEST"] = flat_data["log_dest"]
-        if "exposure" in flat_data:
-            try: raw_config["SYSTEM"]["DEFAULT_BULB_SEC"] = float(flat_data["exposure"])
-            except (ValueError, TypeError): pass
-        if "shots" in flat_data:
-            try: raw_config["SYSTEM"]["DEFAULT_SHOTS"] = int(flat_data["shots"])
-            except (ValueError, TypeError): pass
-        if "mode" in flat_data: raw_config["SYSTEM"]["DEFAULT_MODE"] = flat_data["mode"]
-
-        # Update CONTEXT
-        if "objective" in flat_data and flat_data["objective"] != "":
-            raw_config["CONTEXT"]["objective"] = flat_data["objective"]
-        if "session" in flat_data: raw_config["CONTEXT"]["session"] = flat_data["session"]
-        if "frame_type" in flat_data: raw_config["CONTEXT"]["frame_type"] = flat_data["frame_type"]
-
-        # Update EQUIPMENT
-        if "telescope" in flat_data: raw_config["EQUIPMENT"]["telescope"] = flat_data["telescope"]
-        if "camera" in flat_data: raw_config["EQUIPMENT"]["camera"] = flat_data["camera"]
-        if "optics" in flat_data: raw_config["EQUIPMENT"]["optics"] = flat_data["optics"]
-        if "filter" in flat_data: raw_config["EQUIPMENT"]["filter"] = flat_data["filter"]
-        if "focal" in flat_data:
-            try:
-                if flat_data["focal"] != "":
-                    raw_config["EQUIPMENT"]["focal_length_mm"] = int(flat_data["focal"])
-            except (ValueError, TypeError): pass
-
-        with open(config_path, "w", encoding="utf-8") as f:
-            json.dump(raw_config, f, indent=4, ensure_ascii=False)
+        
+        # Save flat_data directly to ofs_gui_config.json
+        with open(OFS_GUI_CONFIG_PATH, "w", encoding="utf-8") as f:
+            json.dump(flat_data, f, indent=4, ensure_ascii=False)
+            
         return {"status": "saved"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Save error: {e}")

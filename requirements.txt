@@ -1,12 +1,6 @@
 # ==========================================
 # OrionFieldStack Dependencies
 # ==========================================
-# [重要/IMPORTANT] 
-# Pythonパッケージ（dbus-python等）のビルドには以下のシステムライブラリが必要です。
-# 事前にOS側でインストールを行ってください。
-# 
-# $ sudo apt-get update
-# $ sudo apt-get install -y libdbus-1-dev libglib2.0-dev
 # ==========================================
 
 rawpy==0.27.1

@@ -10,6 +10,7 @@ STARFORGE_PATH = os.path.join(BASE_DIR, "starforge", "starforge.py")
 SKYSYNC_PATH = os.path.join(BASE_DIR, "skysync", "skysync.py")
 SHUTTERPRO_CONFIG_PATH = os.path.join(BASE_DIR, "shutterpro03", "config.json")
 GUI_CONFIG_PATH = SHUTTERPRO_CONFIG_PATH
+OFS_GUI_CONFIG_PATH = os.path.join(BASE_DIR, "ofs_gui", "ofs_gui_config.json")
 
 def get_sse_python():
     # Use the GUI's own python environment which is verified to have all dependencies

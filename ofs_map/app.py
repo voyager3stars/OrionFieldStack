@@ -1,5 +1,6 @@
 import asyncio
 import io
+import time
 import json
 import math
 import os
@@ -12,14 +13,13 @@ from fastapi.responses import StreamingResponse, FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from PIL import Image, ImageDraw, ImageFont
-
-import OSM_map_manager
-
+import ofs_map
 app = FastAPI(title="OrionFieldStack Map GUI")
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 STATIC_DIR = os.path.join(BASE_DIR, "static")
-TILES_DIR = os.path.join(BASE_DIR, "data", "tiles")
+DATA_DIR = os.path.expanduser("~/.local/share/ofs_map_data")
+TILES_DIR = os.path.join(DATA_DIR, "tiles")
 
 # Gray tile cache
 _gray_tile_bytes = None
@@ -125,10 +125,35 @@ def get_location():
             return JSONResponse(content={
                 "lat": safe_num(data.get("latitude")),
                 "lon": safe_num(data.get("longitude")),
-                "elevation": safe_num(data.get("elevation"))
+                "elevation": safe_num(data.get("elevation")),
+                "satellites": data.get("satellites", [])
             })
         else:
             return JSONResponse(status_code=500, content={"error": "Failed to run ofs_link", "details": result.stderr})
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+class LocationModel(BaseModel):
+    lat: float
+    lon: float
+    elevation: Optional[float] = None
+
+@app.post("/api/set_location")
+def set_location(loc: LocationModel):
+    """
+    位置情報の保存は ofs_link に委譲する（保存先: ~/.local/share/ofs/location.json）
+    """
+    import sys
+    ofs_link_dir = os.path.join(BASE_DIR, "..", "ofs_link")
+    ofs_link_path = os.path.join(ofs_link_dir, "ofs_link.py")
+    cmd = [sys.executable, ofs_link_path, "--set-location", str(loc.lat), str(loc.lon)]
+    if loc.elevation is not None:
+        cmd += ["--elevation", str(loc.elevation)]
+    try:
+        result = subprocess.run(cmd, cwd=ofs_link_dir, capture_output=True, text=True, timeout=10)
+        if result.returncode == 0:
+            return JSONResponse(content={"status": "ok", "location": json.loads(result.stdout)})
+        return JSONResponse(status_code=500, content={"error": "Failed to save location", "details": result.stderr})
     except Exception as e:
         return JSONResponse(status_code=500, content={"error": str(e)})
 
@@ -144,37 +169,37 @@ class RegionModel(BaseModel):
 
 @app.get("/api/regions")
 async def get_regions():
-    data = OSM_map_manager.load_regions()
+    data = ofs_map.load_regions()
     return JSONResponse(content=data)
 
 @app.post("/api/regions")
 async def add_region(region: RegionModel):
-    data = OSM_map_manager.load_regions()
+    data = ofs_map.load_regions()
     for r in data.get('regions', []):
         if r['name'] == region.name:
             raise HTTPException(status_code=400, detail="Region already exists")
     
     data.setdefault('regions', []).append(region.dict())
-    OSM_map_manager.save_regions(data)
+    ofs_map.save_regions(data)
     return JSONResponse(content={"status": "ok"})
 
 @app.delete("/api/regions/{name}")
 async def delete_region(name: str, background_tasks: BackgroundTasks):
-    data = OSM_map_manager.load_regions()
+    data = ofs_map.load_regions()
     initial_len = len(data.get('regions', []))
     data['regions'] = [r for r in data.get('regions', []) if r['name'] != name]
     
     if len(data.get('regions', [])) == initial_len:
         raise HTTPException(status_code=404, detail="Region not found")
         
-    OSM_map_manager.save_regions(data)
+    ofs_map.save_regions(data)
     
     # 未使用タイルのクリーンアップをバックグラウンドで実行
     if not sync_state["is_syncing"]:
         def run_cleanup():
             try:
                 from core.sync_engine import cleanup_unused_tiles
-                cleanup_unused_tiles(data, BASE_DIR)
+                cleanup_unused_tiles(data, DATA_DIR)
             except Exception as e:
                 print("Cleanup error:", e)
         background_tasks.add_task(run_cleanup)
@@ -190,13 +215,13 @@ class BoundsModel(BaseModel):
 
 @app.post("/api/download_bounds")
 async def download_bounds(bounds: BoundsModel, background_tasks: BackgroundTasks):
-    data = OSM_map_manager.load_regions()
+    data = ofs_map.load_regions()
     
-    min_z = 7
+    min_z = 2
     if bounds.target_level == 'medium':
         max_z = 14
     elif bounds.target_level == 'detailed':
-        max_z = 19
+        max_z = 17
     else:
         try:
             max_z = int(bounds.target_level)
@@ -217,7 +242,7 @@ async def download_bounds(bounds: BoundsModel, background_tasks: BackgroundTasks
     }
     
     data.setdefault('regions', []).append(region_data)
-    OSM_map_manager.save_regions(data)
+    ofs_map.save_regions(data)
     
     if not sync_state["is_syncing"]:
         background_tasks.add_task(background_sync)
@@ -236,14 +261,32 @@ def background_sync():
     sync_state["status"] = "Calculating tiles..."
     sync_cancel_event.clear()
     
+    start_time_list = [None]
+    
     def progress_callback(current, total):
+        if start_time_list[0] is None:
+            start_time_list[0] = time.time()
+            
         pct = (current / total) * 100 if total > 0 else 0
-        sync_state["status"] = f"Downloading: {current}/{total} tiles ({pct:.1f}%)"
+        elapsed = time.time() - start_time_list[0]
+        
+        if current > 0 and elapsed > 0:
+            avg_time = elapsed / current
+            remaining = total - current
+            rem_sec = int(remaining * avg_time)
+            
+            if rem_sec > 60:
+                eta_str = f"ETA: {rem_sec//60}m {rem_sec%60}s"
+            else:
+                eta_str = f"ETA: {rem_sec}s"
+            sync_state["status"] = f"Downloading: {current}/{total} tiles ({pct:.1f}%) - {eta_str}"
+        else:
+            sync_state["status"] = f"Downloading: {current}/{total} tiles ({pct:.1f}%)"
         
     try:
-        data = OSM_map_manager.load_regions()
+        data = ofs_map.load_regions()
         from core.sync_engine import sync_tiles
-        sync_tiles(data, BASE_DIR, cancel_event=sync_cancel_event, progress_callback=progress_callback)
+        sync_tiles(data, DATA_DIR, cancel_event=sync_cancel_event, progress_callback=progress_callback)
         if sync_cancel_event.is_set():
             sync_state["status"] = "Cancelled"
         else:
@@ -270,11 +313,11 @@ async def cancel_sync():
 
 @app.post("/api/estimate_download")
 async def estimate_download(bounds: BoundsModel):
-    min_z = 7
+    min_z = 2
     if bounds.target_level == 'medium':
         max_z = 14
     elif bounds.target_level == 'detailed':
-        max_z = 19
+        max_z = 17
     else:
         try:
             max_z = int(bounds.target_level)
@@ -299,10 +342,10 @@ async def estimate_download(bounds: BoundsModel):
         # Add 1 because the range is inclusive
         count += (max_x - min_x + 1) * (max_y - min_y + 1)
     
-    # Approx 15 KB per tile, 0.2 seconds per tile
+    # Approx 15 KB per tile, 0.5 seconds per tile (0.2s delay + 0.3s network/TLS overhead)
     kb = count * 15
     mb = kb / 1024
-    seconds = count * 0.2
+    seconds = count * 0.5
     
     return JSONResponse(content={
         "tiles": count,

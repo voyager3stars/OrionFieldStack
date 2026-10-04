@@ -1,0 +1,10 @@
+{
+    "save_dir": "~/Pictures",
+    "log-path": "~/Pictures",
+    "sfg-out-dir": "~/Pictures/output",
+    "sfg-log-path": "~/Pictures",
+    "sfg-flat-dir": "~/Pictures/flat",
+    "sfg-dark-dir": "~/Pictures/dark",
+    "sf-outpath": "~/Pictures/bg",
+    "sync-save-dir": "~/Pictures/sync"
+}

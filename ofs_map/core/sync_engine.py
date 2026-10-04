@@ -8,7 +8,7 @@ TILE_SERVER = "https://tile.openstreetmap.org/{z}/{x}/{y}.png"
 USER_AGENT = "OrionFieldStack-MapManager/1.0"
 DOWNLOAD_DELAY = 0.2 # seconds
 
-def cleanup_unused_tiles(regions_data, base_dir):
+def cleanup_unused_tiles(regions_data, data_dir):
     """
     Deletes tiles that are no longer required by any region.
     """
@@ -18,7 +18,7 @@ def cleanup_unused_tiles(regions_data, base_dir):
         tiles = get_tiles_for_region(region)
         required_tiles.update(tiles)
         
-    tiles_dir = os.path.join(base_dir, "data", "tiles")
+    tiles_dir = os.path.join(data_dir, "tiles")
     if not os.path.exists(tiles_dir):
         return 0
         
@@ -51,7 +51,7 @@ def cleanup_unused_tiles(regions_data, base_dir):
                 os.rmdir(root)
     return deleted_count
 
-def sync_tiles(regions_data, base_dir, cancel_event=None, progress_callback=None):
+def sync_tiles(regions_data, data_dir, cancel_event=None, progress_callback=None):
     """
     Synchronizes the local tiles with the regions specified in regions_data.
     """
@@ -65,7 +65,7 @@ def sync_tiles(regions_data, base_dir, cancel_event=None, progress_callback=None
     print(f"Total unique required tiles: {len(required_tiles)}")
     
     # Check existing tiles
-    tiles_dir = os.path.join(base_dir, "data", "tiles")
+    tiles_dir = os.path.join(data_dir, "tiles")
     if not os.path.exists(tiles_dir):
         os.makedirs(tiles_dir)
         
@@ -86,7 +86,7 @@ def sync_tiles(regions_data, base_dir, cancel_event=None, progress_callback=None
     tiles_to_download = required_tiles - existing_tiles
     
     # Clean up unused tiles using the separated function
-    cleanup_unused_tiles(regions_data, base_dir)
+    cleanup_unused_tiles(regions_data, data_dir)
     
     # Download missing tiles
     if tiles_to_download:
@@ -108,20 +108,19 @@ def sync_tiles(regions_data, base_dir, cancel_event=None, progress_callback=None
             
             req = urllib.request.Request(url, headers=req_headers)
             try:
-                with urllib.request.urlopen(req) as response, open(filepath, 'wb') as out_file:
+                with urllib.request.urlopen(req, timeout=5) as response, open(filepath, 'wb') as out_file:
                     out_file.write(response.read())
                 downloaded_count += 1
-                
-                # Print progress
-                if progress_callback:
-                    progress_callback(idx, total_to_download)
-                if idx % 10 == 0 or idx == total_to_download:
-                    print(f"  Progress: {idx}/{total_to_download} ({(idx/total_to_download)*100:.1f}%)", end='\r')
-                    
                 time.sleep(DOWNLOAD_DELAY)
             except urllib.error.URLError as e:
                 failed_count += 1
                 print(f"\n  Failed to download tile {z}/{x}/{y}: {e}")
+            
+            # Print progress regardless of success/failure
+            if progress_callback:
+                progress_callback(idx, total_to_download)
+            if idx % 10 == 0 or idx == total_to_download:
+                print(f"  Progress: {idx}/{total_to_download} ({(idx/total_to_download)*100:.1f}%)", end='\r')
                 
         print(f"\nDownload complete. Success: {downloaded_count}, Failed: {failed_count}")
     

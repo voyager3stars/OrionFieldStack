@@ -25,6 +25,22 @@ import pytz
 # This prevents the heavy database loading on every function call.
 _tf = TimezoneFinder()
 
+# ofs_link のディレクトリ（位置情報の保存・読込は ofs_link が担当）
+_OFS_LINK_DIR = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "ofs_link"))
+
+def load_saved_location():
+    """
+    ofs_link.load_location() 経由で保存済み位置（~/.local/share/ofs/location.json）を取得する。
+    フォールバック時のみ呼ばれるため、import は遅延実行する。
+    """
+    try:
+        if _OFS_LINK_DIR not in sys.path:
+            sys.path.insert(0, _OFS_LINK_DIR)
+        import ofs_link
+        return ofs_link.load_location()
+    except Exception:
+        return {"latitude": 34.6493, "longitude": 135.0015, "elevation": 54.0}
+
 
 class IndiClient:
     """
@@ -189,16 +205,22 @@ class IndiClient:
                 break
 
         # --- 4. 座標・時間・LST計算 ---
+        saved_loc = None
         try:
             latitude = float(lat_raw)
             longitude = float(lon_raw)
             tz_source = "gps"
         except:
-            latitude = float(self._get_config_val('LAST_LATITUDE', 'SYSTEM', 34.6493))
-            longitude = float(self._get_config_val('LAST_LONGITUDE', 'SYSTEM', 135.0015))
+            saved_loc = load_saved_location()
+            latitude = float(saved_loc["latitude"])
+            longitude = float(saved_loc["longitude"])
             tz_source = "last_known"
 
-        elevation = to_float_or_none(alt_raw) or float(self._get_config_val('LAST_ELEVATION', 'SYSTEM', 0.0))
+        elevation = to_float_or_none(alt_raw)
+        if elevation is None:
+            if saved_loc is None:
+                saved_loc = load_saved_location()
+            elevation = float(saved_loc["elevation"])
 
         try:
             timezone_name = _tf.timezone_at(lat=latitude, lng=longitude) or "Asia/Tokyo"

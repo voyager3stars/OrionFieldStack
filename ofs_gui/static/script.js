@@ -214,6 +214,13 @@ document.addEventListener('DOMContentLoaded', () => {
         const config = {};
         const inputs = shutterForm.querySelectorAll('input, select');
         inputs.forEach(input => { if (input.id) config[input.id] = input.value; });
+        
+        // Include additional GUI path inputs
+        const guiConfigIds = ['log-path', 'sfg-out-dir', 'sfg-log-path', 'sfg-flat-dir', 'sfg-dark-dir', 'sf-outpath', 'sync-save-dir'];
+        guiConfigIds.forEach(id => {
+            const el = document.getElementById(id);
+            if(el) config[id] = el.value;
+        });
         try {
             const resp = await fetch('/api/config/save', {
                 method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -934,6 +941,22 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (syncUtcEl) syncUtcEl.textContent = formattedUtc;
             }
 
+            const timeSourceEl = document.getElementById('tel-time-source');
+            const syncTimeSourceEl = document.getElementById('sync-tel-time-source');
+            if (timeSourceEl || syncTimeSourceEl) {
+                const timeSrcState = data.time_source || 'system';
+                const timeSrcText = timeSrcState === 'gpsd' ? 'GPSD' : 'OS';
+                const timeSrcClass = `telemetry-val badge ${timeSrcState === 'gpsd' ? 'connected' : 'disconnected'}`;
+                if (timeSourceEl) {
+                    timeSourceEl.textContent = timeSrcText;
+                    timeSourceEl.className = timeSrcClass;
+                }
+                if (syncTimeSourceEl) {
+                    syncTimeSourceEl.textContent = timeSrcText;
+                    syncTimeSourceEl.className = timeSrcClass;
+                }
+            }
+
             // 3. GPS
             const coordsEl = document.getElementById('tel-gps-coords');
             const syncCoordsEl = document.getElementById('sync-tel-gps-coords');
@@ -955,6 +978,22 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
                 if (elevEl) elevEl.textContent = formattedElev;
                 if (syncElevEl) syncElevEl.textContent = formattedElev;
+            }
+
+            const gpsdStatusEl = document.getElementById('tel-gps-status');
+            const syncGpsdStatusEl = document.getElementById('sync-tel-gps-status');
+            if (gpsdStatusEl || syncGpsdStatusEl) {
+                const gpsdState = data.gpsd_status || 'disable';
+                const statusText = gpsdState === 'enable' ? 'ACTIVE' : 'OFFLINE';
+                const statusClass = `telemetry-val badge ${gpsdState === 'enable' ? 'connected' : 'disconnected'}`;
+                if (gpsdStatusEl) {
+                    gpsdStatusEl.textContent = statusText;
+                    gpsdStatusEl.className = statusClass;
+                }
+                if (syncGpsdStatusEl) {
+                    syncGpsdStatusEl.textContent = statusText;
+                    syncGpsdStatusEl.className = statusClass;
+                }
             }
 
             // 4. Orientation

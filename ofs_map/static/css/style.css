@@ -1,46 +1,154 @@
-/* style.css */
+:root {
+    --bg-dark: #0a0e14;
+    --text-main: #e1e4e8;
+    --accent-gold: #c9a063;
+    --glass-border: rgba(255, 255, 255, 0.1);
+}
+
 body, html {
     margin: 0;
     padding: 0;
     height: 100%;
     width: 100%;
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    background-color: #2c2c2c; /* Dark background for unrendered parts */
+    font-family: 'Inter', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background-color: var(--bg-dark);
+    display: flex;
+    flex-direction: column;
+}
+
+.ofs-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem 2rem 0.5rem 2rem;
+    border-bottom: 1px solid var(--glass-border);
+    background-color: var(--bg-dark);
+    color: var(--text-main);
+    flex-shrink: 0;
+    box-sizing: border-box;
+}
+
+.header-main {
+    display: flex;
+    align-items: center;
+}
+
+.ofs-header h1 {
+    font-size: 1.5rem;
+    letter-spacing: -0.5px;
+    white-space: nowrap;
+    margin: 0;
+}
+
+.v-tag {
+    font-size: 0.7rem;
+    background: var(--accent-gold);
+    color: #000;
+    padding: 2px 6px;
+    border-radius: 4px;
+    vertical-align: middle;
+    margin-left: 5px;
+}
+
+.content-wrapper {
+    display: flex;
+    flex-grow: 1;
+    overflow: hidden;
+}
+
+/* UI Panels */
+.left-panel {
+    width: 50%;
+    flex: 0 0 50%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
 }
 
 #map {
-    height: 100vh;
-    width: 100vw;
+    flex-grow: 1;
     background-color: #c8c8c8; /* Leaflet container background */
+    width: 100%;
 }
 
-/* UI Overlay */
-.overlay-panel {
-    position: absolute;
-    top: 10px;
-    right: 10px;
-    z-index: 1000;
-    background: rgba(30, 30, 30, 0.85);
+.right-half {
+    width: 50%;
+    flex: 0 0 50%;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
+.gps-map-container {
+    flex: 1; /* Takes roughly 50% or appropriate space */
+    display: flex;
+    flex-direction: column;
+    background: rgba(30, 30, 30, 0.95);
     color: white;
-    padding: 15px;
-    border-radius: 8px;
-    backdrop-filter: blur(5px);
-    box-shadow: 0 4px 6px rgba(0,0,0,0.3);
-    min-width: 200px;
+    padding: 20px;
+    box-sizing: border-box;
+    border-left: 1px solid var(--glass-border);
+    border-bottom: 1px solid var(--glass-border);
 }
 
-.overlay-panel h3 {
+.bottom-info-container {
+    flex: 1;
+    display: flex;
+    flex-direction: row;
+    overflow: hidden;
+}
+
+.telemetry-panel {
+    flex: 1;
+    background: rgba(30, 30, 30, 0.95);
+    color: white;
+    padding: 20px;
+    box-sizing: border-box;
+    border-left: 1px solid var(--glass-border);
+    border-right: 1px solid var(--glass-border);
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+}
+
+.satellite-panel {
+    flex: 1;
+    background: rgba(20, 20, 20, 0.95);
+    color: white;
+    padding: 20px;
+    box-sizing: border-box;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+}
+
+.overlay-panel {
+    /* kept for backwards compatibility if needed */
+    width: 33.33%;
+    background: rgba(30, 30, 30, 0.95);
+    color: white;
+    padding: 20px;
+    box-sizing: border-box;
+    border-left: 1px solid var(--glass-border);
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    z-index: 1000;
+}
+
+.overlay-panel h3, .gps-map-container h3, .telemetry-panel h3, .satellite-panel h3 {
     margin-top: 0;
     margin-bottom: 10px;
     font-size: 16px;
     border-bottom: 1px solid #555;
     padding-bottom: 5px;
+    color: var(--accent-gold);
 }
 
 .info-row {
     display: flex;
     justify-content: space-between;
-    margin-bottom: 5px;
+    margin-bottom: 8px;
     font-size: 14px;
 }
 
@@ -53,13 +161,62 @@ body, html {
     color: #4CAF50;
 }
 
+/* GPS Satellites List */
+.satellite-list {
+    flex-grow: 1;
+    overflow-y: auto;
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 4px;
+    padding: 10px;
+    font-size: 13px;
+    margin-bottom: 15px;
+}
+
+.sat-placeholder {
+    color: #888;
+    text-align: center;
+    padding: 10px 0;
+}
+
+.sat-item {
+    display: flex;
+    justify-content: space-between;
+    padding: 6px 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.sat-item:last-child {
+    border-bottom: none;
+}
+
+.sat-item.used {
+    color: #81c784;
+    font-weight: 600;
+}
+
+.sat-id {
+    width: 40px;
+}
+.sat-el-az {
+    flex-grow: 1;
+    color: #ccc;
+}
+.sat-snr {
+    width: 60px;
+    text-align: right;
+}
+
+.panel-bottom-actions {
+    margin-top: auto;
+}
+
 .admin-link {
     display: block;
-    margin-top: 15px;
     text-align: right;
     color: #64B5F6;
     text-decoration: none;
     font-size: 14px;
+    margin-bottom: 15px;
 }
 
 .admin-link:hover {

@@ -194,10 +194,8 @@ CONFIG = {
     "PROP_WEATHER": "WEATHER_PARAMETERS",   # INDI property key for environmental data (Temp/Pres)
     
     # Default Location Fallbacks (used if INDI is unavailable)
+    # Location is managed by ofs_link (~/.local/share/ofs/location.json)
     "DEFAULT_SITE_NAME": "Akashi Municipal Planetarium (JST Meridian)",
-    "LAST_LATITUDE": 34.6493,
-    "LAST_LONGITUDE": 135.0015,
-    "LAST_ELEVATION": 54.0,
 
     # --- OBSERVATION CONTEXT ---
     # Metadata describing the current imaging session.

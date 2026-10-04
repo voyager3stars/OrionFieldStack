@@ -8,7 +8,8 @@ from core.sync_engine import sync_tiles
 from core.tile_math import get_tiles_for_region
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-REGIONS_FILE = os.path.join(BASE_DIR, "data", "regions.json")
+DATA_DIR = os.path.expanduser("~/.local/share/ofs_map_data")
+REGIONS_FILE = os.path.join(DATA_DIR, "regions.json")
 
 def load_regions():
     if not os.path.exists(REGIONS_FILE):
@@ -85,7 +86,7 @@ def cmd_list(args):
 
 def cmd_sync(args):
     data = load_regions()
-    sync_tiles(data, BASE_DIR)
+    sync_tiles(data, DATA_DIR)
 
 def main():
     parser = argparse.ArgumentParser(description="OSM Map Manager for offline tile synchronization.")
