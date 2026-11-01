@@ -1,0 +1,30 @@
+# === Python / Environment ===
+# 仮想環境フォルダそのものを除外
+venv/
+.venv/
+# Python実行時に生成されるキャッシュ
+__pycache__/
+*.pyc
+
+# === Hardware / OS Specific ===
+# lgpioライブラリが生成する一時ファイル
+.lgd-nfy*
+# macOSなどのシステムファイル（もし混入しても無視）
+.DS_Store
+
+# === Project Configuration ===
+# 自分専用の設定ファイルはGit管理から外し、sampleのみを管理する
+config.json
+
+# === Data & Logs (重要) ===
+# 実行中に生成される撮影データやログファイルを履歴に含めない
+# これを入れないと、Gitのサイズが巨大になってしまいます
+*.jpg
+*.fits
+*.csv
+latest_shot.json
+shutter_history.json
+shutter_log.json
+
+# === Gitに「入れる」べきものはここには書かない ===
+# requirements.txt, config.json.sample, 各.pyファイル は管理対象

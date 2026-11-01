@@ -1,0 +1,1152 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OrionFieldStack Control Panel</title>
+    <link rel="stylesheet" href="style.css?v=1.1">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=JetBrains+Mono&display=swap"
+        rel="stylesheet">
+</head>
+
+<body>
+    <div class="container">
+        <header>
+            <div class="header-main">
+                <h1>OrionFieldStack <span class="v-tag">v1.5.3</span></h1>
+                <nav class="tabs">
+                    <button class="tab-btn active" data-tab="shutter">SHUTTER</button>
+                    <button class="tab-btn" data-tab="logdata">LOGDATA</button>
+                    <button class="tab-btn" data-tab="starforge">STARFORGE</button>
+                    <button class="tab-btn" data-tab="sync">SYNC</button>
+                </nav>
+            </div>
+            <div id="connection-status" class="status-idle">SYSTEM IDLE</div>
+        </header>
+
+        <main>
+            <!-- SHUTTER TAB -->
+            <div id="shutter-tab" class="tab-panel active">
+                <div class="shutter-layout">
+                    <section class="control-panel">
+                        <form id="shutter-form">
+                            <!-- Common Settings -->
+                            <div class="card">
+                                <h2>Common Settings</h2>
+                                <div class="form-grid">
+                                    <div class="form-group">
+                                        <label for="shots">Shots</label>
+                                        <input type="number" id="shots" name="shots" value="10" min="0">
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="mode">Mode</label>
+                                        <select id="mode" name="mode">
+                                            <option value="camera">Camera</option>
+                                            <option value="bulb">Bulb</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="exposure">Exposure (sec)</label>
+                                        <input type="number" id="exposure" name="exposure" value="30.0" step="0.1">
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="objective">Objective</label>
+                                        <input type="text" id="objective" name="objective" placeholder="e.g. M42 Orion Nebula">
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="frame_type_select">Frame Type</label>
+                                        <select id="frame_type_select">
+                                            <option value="test">test</option>
+                                            <option value="light">light</option>
+                                            <option value="dark">dark</option>
+                                            <option value="flat">flat</option>
+                                            <option value="bias">bias</option>
+                                            <option value="custom">Other...</option>
+                                        </select>
+                                        <input type="text" id="frame_type" name="frame_type" value="test" class="hidden"
+                                            style="margin-top: 5px;">
+                                    </div>
+                                    <div class="form-group full-width">
+                                        <label for="save_dir">Save Directory</label>
+                                        <div class="input-with-button">
+                                            <input type="text" id="save_dir" name="save_dir">
+                                            <button type="button" id="browse-dir-btn" class="btn-small">Browse</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Advanced Toggle -->
+                            <div class="advanced-header">
+                                <button type="button" id="toggle-advanced" class="btn-toggle">
+                                    <span>Advanced Settings</span>
+                                    <span class="icon">▾</span>
+                                </button>
+                            </div>
+
+                            <!-- Advanced Settings Section -->
+                            <div id="advanced-settings" class="advanced-panel">
+                                <div class="card">
+                                    <h3>Equipment Details</h3>
+                                    <div class="form-grid">
+                                        <div class="form-group">
+                                            <label for="telescope">Telescope</label>
+                                            <input type="text" id="telescope" name="telescope">
+                                        </div>
+                                        <div class="form-group">
+                                            <label for="camera">Camera</label>
+                                            <input type="text" id="camera" name="camera">
+                                        </div>
+                                        <div class="form-group">
+                                            <label for="optics">Optics</label>
+                                            <input type="text" id="optics" name="optics">
+                                        </div>
+                                        <div class="form-group">
+                                            <label for="filter">Filter</label>
+                                            <input type="text" id="filter" name="filter">
+                                        </div>
+                                        <div class="form-group">
+                                            <label for="focal">Focal Length (mm)</label>
+                                            <input type="number" id="focal" name="focal">
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="card">
+                                    <h3>Hardware & Network</h3>
+                                    <div class="form-grid">
+                                        <div class="form-group">
+                                            <label for="session">Session ID (def = auto)</label>
+                                            <input type="text" id="session" name="session" value="def">
+                                        </div>
+                                        <div class="form-group">
+                                            <label for="mount">INDI Mount Device</label>
+                                            <input type="text" id="mount" name="mount">
+                                        </div>
+                                        <div class="form-group">
+                                            <label for="weather">INDI Weather Device</label>
+                                            <input type="text" id="weather" name="weather">
+                                        </div>
+                                        <div class="form-group">
+                                            <label for="display">Display Mode</label>
+                                            <select id="display" name="display">
+                                                <option value="full">Full</option>
+                                                <option value="simple">Simple</option>
+                                                <option value="off">Off</option>
+                                            </select>
+                                        </div>
+                                        <div class="form-group">
+                                            <label for="log_dest">Log Dest</label>
+                                            <input type="text" id="log_dest" name="log_dest">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="actions">
+                                <button type="submit" id="start-btn" class="btn-primary">START SESSION</button>
+                                <button type="button" id="save-default-btn" class="btn-secondary">Save as
+                                    Default</button>
+                                <button type="button" id="stop-btn" class="btn-danger" disabled>ABORT</button>
+                            </div>
+                        </form>
+                    </section>
+
+                    <section class="log-panel">
+                        <!-- Telemetry Dashboard -->
+                        <div class="card telemetry-dashboard">
+                            <div class="telemetry-grid">
+                                <!-- INDI Status -->
+                                <div class="telemetry-col">
+                                    <div class="telemetry-section-title">INDI status</div>
+                                    <div class="telemetry-row">
+                                        <span class="telemetry-label">Server</span>
+                                        <span id="tel-indi-server"
+                                            class="telemetry-val badge disconnected">DISCONNECTED</span>
+                                    </div>
+                                    <div class="telemetry-row">
+                                        <span class="telemetry-label">Mount</span>
+                                        <span id="tel-indi-status"
+                                            class="telemetry-val status-badge unknown">UNKNOWN</span>
+                                    </div>
+                                </div>
+
+                                <!-- Time -->
+                                <div class="telemetry-col">
+                                    <div class="telemetry-section-title">Time</div>
+                                    <div class="telemetry-row">
+                                        <span class="telemetry-label">Local</span>
+                                        <span id="tel-time-local" class="telemetry-val monospace">--:--:--</span>
+                                    </div>
+                                    <div class="telemetry-row">
+                                        <span class="telemetry-label">UTC</span>
+                                        <span id="tel-time-utc" class="telemetry-val monospace">--:--:--</span>
+                                    </div>
+                                    <div class="telemetry-row">
+                                        <span class="telemetry-label">Source</span>
+                                        <span id="tel-time-source" class="telemetry-val badge">N/A</span>
+                                    </div>
+                                </div>
+
+                                <!-- GPS -->
+                                <div class="telemetry-col">
+                                    <div class="telemetry-section-title">GPS</div>
+                                    <div class="telemetry-row">
+                                        <span class="telemetry-label">Lat / Lon</span>
+                                        <span id="tel-gps-coords" class="telemetry-val monospace">N/A</span>
+                                    </div>
+                                    <div class="telemetry-row">
+                                        <span class="telemetry-label">Elev</span>
+                                        <span id="tel-gps-elev" class="telemetry-val monospace">N/A</span>
+                                    </div>
+                                    <div class="telemetry-row">
+                                        <span class="telemetry-label">GPSD</span>
+                                        <span id="tel-gps-status" class="telemetry-val badge">N/A</span>
+                                    </div>
+                                </div>
+
+                                <!-- Orientation -->
+                                <div class="telemetry-col">
+                                    <div class="telemetry-section-title">Position</div>
+                                    <div class="telemetry-row">
+                                        <span class="telemetry-label">RA / DEC</span>
+                                        <span id="tel-orient-coords" class="telemetry-val monospace">N/A</span>
+                                    </div>
+                                    <div class="telemetry-row">
+                                        <span class="telemetry-label">Pier Side</span>
+                                        <span id="tel-orient-pier"
+                                            class="telemetry-val status-badge unknown">UNKNOWN</span>
+                                    </div>
+                                </div>
+
+                                <!-- Environment -->
+                                <div class="telemetry-col">
+                                    <div class="telemetry-section-title">Environment</div>
+                                    <div class="telemetry-row">
+                                        <span class="telemetry-label">Temp</span>
+                                        <span id="tel-env-temp" class="telemetry-val monospace">--</span>
+                                    </div>
+                                    <div class="telemetry-row">
+                                        <span class="telemetry-label">Humid</span>
+                                        <span id="tel-env-hum" class="telemetry-val monospace">--</span>
+                                    </div>
+                                    <div class="telemetry-row">
+                                        <span class="telemetry-label">Press</span>
+                                        <span id="tel-env-press" class="telemetry-val monospace">--</span>
+                                    </div>
+                                    <div class="telemetry-row">
+                                        <span class="telemetry-label">Dew P</span>
+                                        <span id="tel-env-dew" class="telemetry-val monospace">--</span>
+                                    </div>
+                                    <div class="telemetry-row">
+                                        <span class="telemetry-label">CPU(M)</span>
+                                        <span id="tel-env-cpu-m" class="telemetry-val monospace">--</span>
+                                    </div>
+                                    <div class="telemetry-row">
+                                        <span class="telemetry-label">CPU(R)</span>
+                                        <span id="tel-env-cpu-r" class="telemetry-val monospace">--</span>
+                                    </div>
+                                </div>
+
+                                <!-- FlashAir -->
+                                <div class="telemetry-col">
+                                    <div class="telemetry-section-title">FlashAir</div>
+                                    <div class="telemetry-row">
+                                        <span class="telemetry-label">Status</span>
+                                        <span id="tel-flashair-status"
+                                            class="telemetry-val badge disconnected">DISCONNECTED</span>
+                                    </div>
+                                    <div class="telemetry-row">
+                                        <span class="telemetry-label">URL</span>
+                                        <span id="tel-flashair-url-container" class="telemetry-val monospace">
+                                            <a id="tel-flashair-url" target="_blank" class="telemetry-link">-</a>
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="status-dashboard card">
+                            <div class="dashboard-header">
+                                <h3>Live Status</h3>
+                                <span id="stat-label" class="badge idle">IDLE</span>
+                            </div>
+                            <div class="dashboard-grid">
+                                <div class="stat-item">
+                                    <span class="stat-label">TARGET</span>
+                                    <span id="stat-target" class="stat-value">N/A</span>
+                                </div>
+                                <div class="stat-item">
+                                    <span class="stat-label">PROGRESS</span>
+                                    <span id="stat-shots" class="stat-value">-- / --</span>
+                                </div>
+                                <div class="stat-item">
+                                    <span class="stat-label">MODE</span>
+                                    <span id="stat-mode" class="stat-value">N/A</span>
+                                </div>
+                            </div>
+                            <div class="progress-container">
+                                <div id="progress-bar" class="progress-bar" style="width: 0%"></div>
+                            </div>
+                        </div>
+                        <div class="terminal-header">
+                            <span>LIVE LOG CONSOLE</span>
+                            <button type="button" id="clear-log">Clear</button>
+                        </div>
+                        <div id="terminal" class="terminal-body">
+                            <div class="log-line system">Waiting for connection...</div>
+                        </div>
+                    </section>
+                </div>
+            </div>
+
+            <!-- LOGDATA TAB -->
+            <div id="logdata-tab" class="tab-panel">
+                <div class="logdata-layout-3col">
+                    <!-- Column 1: Sessions -->
+                    <aside class="col-sessions">
+                        <div class="col-header-rich">
+                            <div class="input-with-button">
+                                <input type="text" id="log-path" placeholder="Log Folder">
+                                <button type="button" id="browse-log-path-btn" class="btn-small">Browse</button>
+                            </div>
+                            <button type="button" id="load-logs-btn" class="btn-primary-small">Load Logs</button>
+                        </div>
+
+                        <!-- SSE Runner controls -->
+                        <div class="sse-controls-section">
+                            <h3 class="sse-title">SkySolverEngine (SSE)</h3>
+                            <div class="sse-form">
+                                <div class="form-group-compact">
+                                    <label for="sse-target">Target</label>
+                                    <select id="sse-target">
+                                        <option value="folder">Entire Folder</option>
+                                        <option value="session" id="sse-target-session-opt" disabled>Selected Session
+                                        </option>
+                                        <option value="file" id="sse-target-file-opt" disabled>Selected File</option>
+                                    </select>
+                                </div>
+                                <div class="sse-options">
+                                    <label class="checkbox-container">
+                                        <input type="checkbox" id="sse-allsky">
+                                        AllSky
+                                    </label>
+                                    <label class="checkbox-container">
+                                        <input type="checkbox" id="sse-force">
+                                        Force
+                                    </label>
+                                </div>
+                                <div class="sse-actions">
+                                    <button type="button" id="sse-run-btn" class="btn-primary-small">RUN SSE</button>
+                                    <button type="button" id="sse-stop-btn" class="btn-danger-small"
+                                        disabled>STOP</button>
+                                </div>
+
+                                <!-- Active Status Indicator -->
+                                <div id="sse-status-bar" class="sse-status-bar hidden">
+                                    <div class="sse-status-main">
+                                        <span class="sse-spinner"></span>
+                                        <span id="sse-status-text">SSE Running...</span>
+                                    </div>
+                                    <div id="sse-status-file" class="sse-status-file"></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Starflux Runner controls -->
+                        <div class="sse-controls-section" style="border-top: 1px solid var(--glass-border);">
+                            <h3 class="sse-title">StarFlux (Analyzer)</h3>
+                            <div class="sse-form">
+                                <div class="form-group-compact">
+                                    <label for="sf-target">Target</label>
+                                    <select id="sf-target">
+                                        <option value="folder">Entire Folder</option>
+                                        <option value="session" id="sf-target-session-opt" disabled>Selected Session
+                                        </option>
+                                        <option value="file" id="sf-target-file-opt" disabled>Selected File</option>
+                                    </select>
+                                </div>
+                                <div class="form-group-compact"
+                                    style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
+                                    <div class="form-group">
+                                        <label for="sf-snr">SNR (def=5)</label>
+                                        <input type="number" id="sf-snr" value="5.0" step="0.1"
+                                            style="padding: 4px 8px; font-size: 0.75rem; background: rgba(0,0,0,0.3); border: 1px solid var(--glass-border); color: white; border-radius: 4px; width: 100%;">
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="sf-top-stars">Stars (def=300)</label>
+                                        <input type="number" id="sf-top-stars" value="300" step="10"
+                                            style="padding: 4px 8px; font-size: 0.75rem; background: rgba(0,0,0,0.3); border: 1px solid var(--glass-border); color: white; border-radius: 4px; width: 100%;">
+                                    </div>
+                                </div>
+                                <div class="sse-options">
+                                    <label class="checkbox-container">
+                                        <input type="checkbox" id="sf-force">
+                                        Force
+                                    </label>
+                                    <label class="checkbox-container">
+                                        <input type="checkbox" id="sf-plot" checked>
+                                        Plot (Hist)
+                                    </label>
+                                    <label class="checkbox-container">
+                                        <input type="checkbox" id="sf-save-bg" checked>
+                                        Save BG
+                                    </label>
+                                </div>
+                                <div class="form-group-compact" style="margin-top: 5px; margin-bottom: 5px;">
+                                    <label for="sf-bg-format">BG Format</label>
+                                    <select id="sf-bg-format" style="padding: 4px 8px; font-size: 0.75rem; background: rgba(0,0,0,0.3); border: 1px solid var(--glass-border); color: white; border-radius: 4px; width: 100%;">
+                                        <option value="npz" selected>npz (Recommended)</option>
+                                        <option value="fit">fit</option>
+                                    </select>
+                                </div>
+                                <div class="form-group-compact" style="margin-bottom: 10px;">
+                                    <label for="sf-outpath">BG Save Path (Optional)</label>
+                                    <input type="text" id="sf-outpath" placeholder="Leave empty for original dir"
+                                        style="padding: 4px 8px; font-size: 0.75rem; background: rgba(0,0,0,0.3); border: 1px solid var(--glass-border); color: white; border-radius: 4px; width: 100%;">
+                                </div>
+                                <div class="sse-actions">
+                                    <button type="button" id="sf-run-btn" class="btn-primary-small">RUN
+                                        STARFLUX</button>
+                                    <button type="button" id="sf-stop-btn" class="btn-danger-small"
+                                        disabled>STOP</button>
+                                </div>
+
+                                <!-- Active Status Indicator -->
+                                <div id="sf-status-bar" class="sse-status-bar hidden"
+                                    style="background: rgba(201, 160, 99, 0.08); border-color: rgba(201, 160, 99, 0.25);">
+                                    <div class="sse-status-main" style="color: var(--accent-gold);">
+                                        <span class="sse-spinner"
+                                            style="border-top-color: var(--accent-gold); border-color: rgba(201, 160, 99, 0.2);"></span>
+                                        <span id="sf-status-text">Starflux Running...</span>
+                                    </div>
+                                    <div id="sf-status-file" class="sse-status-file"></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="list-title">Sessions</div>
+                        <div id="session-list" class="list-container">
+                            <div class="placeholder">Load folder to browse</div>
+                        </div>
+                    </aside>
+
+                    <!-- Column 2: Files -->
+                    <aside class="col-files">
+                        <div class="list-title">Files</div>
+                        <div id="file-list" class="list-container">
+                            <div class="placeholder">Select a session</div>
+                        </div>
+                    </aside>
+
+                    <!-- Column 3: Details -->
+                    <section class="col-details">
+                        <div id="log-detail-placeholder" class="detail-placeholder">
+                            Select a file to view details
+                        </div>
+                        <div id="log-content" class="log-content hidden">
+                            <div class="preview-card">
+                                <h3>Image Preview</h3>
+                                <div id="image-preview-container" class="image-container zoomable">
+                                    <div class="no-preview">No Preview Available</div>
+                                </div>
+                                <div id="image-info" class="image-info"></div>
+                            </div>
+                            <div class="metadata-card">
+                                <h3>Metadata Details</h3>
+                                <div class="metadata-tabs">
+                                    <button type="button" class="meta-tab-btn active" data-meta="table">Table</button>
+                                    <button type="button" class="meta-tab-btn" data-meta="json">Raw JSON</button>
+                                </div>
+                                <div id="meta-table-view" class="meta-panel active">
+                                    <table id="metadata-table"></table>
+                                </div>
+                                <div id="meta-json-view" class="meta-panel">
+                                    <pre id="metadata-json"></pre>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+                </div>
+            </div>
+
+            <!-- STARFORGE TAB -->
+            <div id="starforge-tab" class="tab-panel">
+                <div class="logdata-layout-3col">
+                    <!-- Column 1: StarForge Settings, Actions & File Selectors -->
+                    <aside class="col-sessions"
+                        style="max-height: calc(100vh - 120px); height: calc(100vh - 120px); display: flex; flex-direction: column;">
+                        <div class="sse-controls-section" style="padding: 8px 10px;">
+                            <h3 class="sse-title" style="margin-bottom: 4px;">StarForge Stacker</h3>
+                            <form id="starforge-form" class="sse-form" onsubmit="return false;" style="gap: 4px;">
+                                <div style="display: grid; grid-template-columns: 1fr 1.2fr; gap: 6px;">
+                                    <div class="form-group-compact">
+                                        <label for="sfg-mode" style="min-width: unset;">Mode</label>
+                                        <select id="sfg-mode" name="mode" style="padding: 4px 6px;">
+                                            <option value="mono">Mono</option>
+                                            <option value="color">Color</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group-compact">
+                                        <label for="sfg-threshold" style="min-width: unset;">Thresh</label>
+                                        <input type="number" id="sfg-threshold" name="threshold" value="0.20"
+                                            step="0.01" min="0" max="1" style="width: 100%; padding: 4px 6px;">
+                                    </div>
+                                </div>
+                                <div class="form-group-compact">
+                                    <label for="sfg-out-dir" style="min-width: unset; width: 45px;">Out Dir</label>
+                                    <div class="input-with-button" style="flex-grow: 1; gap: 4px;">
+                                        <input type="text" id="sfg-out-dir" name="out_dir" placeholder="./output"
+                                            style="width: 100%; padding: 4px 6px;">
+                                        <button type="button" id="browse-sfg-out-dir-btn" class="btn-small"
+                                            style="padding: 4px 8px;">Browse</button>
+                                    </div>
+                                </div>
+
+                                <!-- Advanced Toggle -->
+                                <div class="advanced-header" style="margin-top: 4px; margin-bottom: 2px;">
+                                    <button type="button" id="toggle-sfg-advanced" class="btn-toggle"
+                                        style="padding: 4px 8px; font-size: 0.7rem;">
+                                        <span>Advanced Options</span>
+                                        <span class="icon">▾</span>
+                                    </button>
+                                </div>
+
+                                <!-- Advanced Settings Section -->
+                                <div id="sfg-advanced-settings" class="advanced-panel">
+                                    <div
+                                        style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 4px;">
+                                        <div class="form-group-compact">
+                                            <label for="sfg-method" style="min-width: unset;">Method</label>
+                                            <select id="sfg-method" name="method" style="padding: 4px 6px;">
+                                                <option value="sigma_clip">Sigma Clip</option>
+                                                <option value="median">Median</option>
+                                                <option value="mean">Mean</option>
+                                            </select>
+                                        </div>
+                                        <div class="form-group-compact">
+                                            <label for="sfg-limit" style="min-width: unset;">Limit</label>
+                                            <input type="number" id="sfg-limit" name="limit" placeholder="None" min="1"
+                                                style="width: 100%; padding: 4px 6px;">
+                                        </div>
+                                    </div>
+                                    <div class="form-group-compact" style="margin-bottom: 4px;">
+                                        <label for="sfg-out" style="min-width: unset; width: 45px;">Out File</label>
+                                        <input type="text" id="sfg-out" name="out" value="AUTO"
+                                            style="flex-grow: 1; padding: 4px 6px;">
+                                    </div>
+                                </div>
+
+                                <div class="sse-actions" style="margin-top: 4px; display: flex; gap: 6px;">
+                                    <button type="button" id="sfg-run-btn" class="btn-primary-small"
+                                        style="flex: 2; font-weight: 600; padding: 6px;">RUN STARFORGE</button>
+                                    <button type="button" id="sfg-stop-btn" class="btn-danger-small"
+                                        style="flex: 1; padding: 6px;" disabled>STOP</button>
+                                </div>
+
+                                <!-- Active Status Indicator -->
+                                <div id="sfg-status-bar" class="sse-status-bar hidden"
+                                    style="background: rgba(0, 255, 136, 0.08); border-color: rgba(0, 255, 136, 0.25); margin-top: 6px; padding: 6px 10px;">
+                                    <div class="sse-status-main" style="color: #00ff88;">
+                                        <span class="sse-spinner"
+                                            style="border-top-color: #00ff88; border-color: rgba(0, 255, 136, 0.2);"></span>
+                                        <span id="sfg-status-text">Stacking...</span>
+                                    </div>
+                                    <div id="sfg-status-file" class="sse-status-file"></div>
+                                </div>
+                            </form>
+                        </div>
+
+                        <!-- Log Loader & Session/File Lists -->
+                        <div
+                            style="border-top: 1px solid var(--glass-border); padding: 8px 10px; display: flex; flex-direction: column; flex-grow: 1; min-height: 0;">
+                            <div class="col-header-rich"
+                                style="padding: 0 0 6px 0; border-bottom: 1px solid var(--glass-border); display: flex; flex-direction: row; gap: 6px; align-items: center;">
+                                <div class="input-with-button" style="width: 100%; gap: 4px;">
+                                    <input type="text" id="sfg-log-path" placeholder="Log Folder"
+                                        placeholder="Log Folder"
+                                        style="width: 100%; padding: 4px 8px; font-size: 0.75rem;">
+                                    <button type="button" id="browse-sfg-log-path-btn" class="btn-small"
+                                        style="padding: 4px 8px;">Browse</button>
+                                    <button type="button" id="sfg-load-logs-btn" class="btn-primary-small"
+                                        style="width: auto; padding: 4px 10px; white-space: nowrap; font-weight: 600;">Load</button>
+                                </div>
+                            </div>
+
+                            <div
+                                style="display: flex; flex-direction: column; gap: 8px; margin-top: 8px; flex-grow: 1; min-height: 0;">
+                                <!-- Sessions -->
+                                <div
+                                    style="display: flex; flex-direction: column; border: 1px solid var(--glass-border); border-radius: 8px; background: rgba(0,0,0,0.15); overflow: hidden; flex: 1; min-height: 100px;">
+                                    <div class="list-title"
+                                        style="display: flex; justify-content: space-between; align-items: center; padding: 4px 8px; background: rgba(255,255,255,0.03);">
+                                        <span>Sessions</span>
+                                        <div style="font-size: 0.7rem;">
+                                            <a href="#" id="sfg-sessions-select-all"
+                                                style="color: var(--accent-blue); text-decoration: none; margin-right: 6px;">All</a>
+                                            <a href="#" id="sfg-sessions-select-none"
+                                                style="color: var(--text-dim); text-decoration: none;">None</a>
+                                        </div>
+                                    </div>
+                                    <div id="sfg-session-list" class="list-container"
+                                        style="flex: 1; overflow-y: auto; padding: 4px;">
+                                        <div class="placeholder">Load folder to browse</div>
+                                    </div>
+                                </div>
+                                <!-- Files -->
+                                <div
+                                    style="display: flex; flex-direction: column; border: 1px solid var(--glass-border); border-radius: 8px; background: rgba(0,0,0,0.15); overflow: hidden; flex: 1; min-height: 100px;">
+                                    <div class="list-title"
+                                        style="display: flex; justify-content: space-between; align-items: center; padding: 4px 8px; background: rgba(255,255,255,0.03);">
+                                        <span>Files to Stack</span>
+                                        <div style="font-size: 0.7rem;">
+                                            <a href="#" id="sfg-files-select-all"
+                                                style="color: var(--accent-blue); text-decoration: none; margin-right: 6px;">All</a>
+                                            <a href="#" id="sfg-files-select-none"
+                                                style="color: var(--text-dim); text-decoration: none;">None</a>
+                                        </div>
+                                    </div>
+                                    <div id="sfg-file-list" class="list-container"
+                                        style="flex: 1; overflow-y: auto; padding: 4px;">
+                                        <div class="placeholder">Select sessions first</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </aside>
+
+                    <!-- Column 2: Calibration Settings -->
+                    <aside class="col-files" style="overflow-y: auto; max-height: calc(100vh - 120px); padding: 10px;">
+                        
+                        <div class="sse-controls-section" style="border-bottom: 1px solid var(--glass-border); padding-bottom: 15px; margin-bottom: 15px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <h3 class="sse-title" style="margin: 0;">Back Ground analysis</h3>
+                                <button type="button" id="sfg-view-bg-btn" class="btn-small">View</button>
+                            </div>
+                        </div>
+
+                        <div class="sse-controls-section" style="border-bottom: none;">
+                            <h3 class="sse-title">Calibration Settings</h3>
+
+                            <!-- Flat Calibration -->
+                            <div style="margin-top: 10px; padding-top: 8px;">
+                                <label class="checkbox-container" style="font-weight: 600;">
+                                    <input type="checkbox" id="sfg-use-flat" name="use_flat" checked>
+                                    Flat Calibration
+                                </label>
+                                <div id="sfg-flat-fields"
+                                    style="margin-left: 15px; margin-top: 5px; display: flex; flex-direction: column; gap: 8px;">
+                                    <div style="display: flex; flex-direction: column;">
+                                        <label for="sfg-flat-dir"
+                                            style="font-size: 0.7rem; color: var(--text-dim); margin-bottom: 4px;">Flat
+                                            Directory</label>
+                                        <div class="input-with-button">
+                                            <input type="text" id="sfg-flat-dir" name="flat_dir"
+                                                placeholder="~/Pictures/flat" style="flex-grow: 1;">
+                                            <button type="button" id="browse-sfg-flat-dir-btn"
+                                                class="btn-small">Browse</button>
+                                        </div>
+                                    </div>
+                                    <div style="display: flex; flex-direction: column;">
+                                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                                            <label style="font-size: 0.7rem; color: var(--text-dim); margin-bottom: 0;">Flat Session (optional)</label>
+                                            <button type="button" id="sfg-view-flat-btn" class="btn-small" style="padding: 2px 8px; font-size: 0.65rem;">View</button>
+                                        </div>
+                                        <input type="hidden" id="sfg-flat-session" name="flat_session">
+                                        <div
+                                            style="display: flex; flex-direction: column; border: 1px solid var(--glass-border); border-radius: 8px; background: rgba(0,0,0,0.15); overflow: hidden; height: 140px;">
+                                            <div class="list-title"
+                                                style="padding: 4px 12px; background: rgba(255,255,255,0.03); font-size: 0.65rem; display: flex; justify-content: space-between;">
+                                                <span>Available Sessions</span>
+                                                <span>stacked fit</span>
+                                            </div>
+                                            <div id="sfg-flat-session-list" class="list-container"
+                                                style="flex: 1; overflow-y: auto;">
+                                                <div class="placeholder">Select flat folder to load sessions</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div style="display: flex; gap: 8px;">
+                                        <div style="display: flex; flex-direction: column; flex: 1;">
+                                            <label for="sfg-flat-mult-mode" style="font-size: 0.7rem; color: var(--text-dim); margin-bottom: 4px;">Multiplier Mode</label>
+                                            <select id="sfg-flat-mult-mode" name="flat_mult_mode" style="padding: 4px; font-size: 0.75rem; background: rgba(0,0,0,0.3); border: 1px solid var(--glass-border); color: white; border-radius: 4px;">
+                                                <option value="none">None</option>
+                                                <option value="manual">Manual</option>
+                                                <option value="auto_ccr">Auto CCR</option>
+                                                <option value="auto_fit">Auto Fit</option>
+                                            </select>
+                                        </div>
+                                        <div style="display: flex; flex-direction: column; flex: 1;">
+                                            <label for="sfg-flat-mult-value" style="font-size: 0.7rem; color: var(--text-dim); margin-bottom: 4px;">Value (manual)</label>
+                                            <input type="number" id="sfg-flat-mult-value" name="flat_mult_value" value="1.0" step="0.01" style="padding: 4px; font-size: 0.75rem; background: rgba(0,0,0,0.3); border: 1px solid var(--glass-border); color: white; border-radius: 4px;" disabled>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Dark Calibration -->
+                            <div
+                                style="border-top: 1px solid var(--glass-border); margin-top: 15px; padding-top: 12px;">
+                                <label class="checkbox-container" style="font-weight: 600;">
+                                    <input type="checkbox" id="sfg-use-dark" name="use_dark" checked>
+                                    Dark Subtraction
+                                </label>
+                                <div id="sfg-dark-fields"
+                                    style="margin-left: 15px; margin-top: 5px; display: flex; flex-direction: column; gap: 8px;">
+                                    <div style="display: flex; flex-direction: column;">
+                                        <label for="sfg-dark-dir"
+                                            style="font-size: 0.7rem; color: var(--text-dim); margin-bottom: 4px;">Dark
+                                            Directory</label>
+                                        <div class="input-with-button">
+                                            <input type="text" id="sfg-dark-dir" name="dark_dir"
+                                                placeholder="~/Pictures/dark" style="flex-grow: 1;">
+                                            <button type="button" id="browse-sfg-dark-dir-btn"
+                                                class="btn-small">Browse</button>
+                                        </div>
+                                    </div>
+                                    <div style="display: flex; flex-direction: column;">
+                                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                                            <label style="font-size: 0.7rem; color: var(--text-dim); margin-bottom: 0;">Dark Session (optional)</label>
+                                            <button type="button" id="sfg-view-dark-btn" class="btn-small" style="padding: 2px 8px; font-size: 0.65rem;">View</button>
+                                        </div>
+                                        <input type="hidden" id="sfg-dark-session" name="dark_session">
+                                        <div
+                                            style="display: flex; flex-direction: column; border: 1px solid var(--glass-border); border-radius: 8px; background: rgba(0,0,0,0.15); overflow: hidden; height: 140px;">
+                                            <div class="list-title"
+                                                style="padding: 4px 12px; background: rgba(255,255,255,0.03); font-size: 0.65rem; display: flex; justify-content: space-between;">
+                                                <span>Available Sessions</span>
+                                                <span>stacked fit</span>
+                                            </div>
+                                            <div id="sfg-dark-session-list" class="list-container"
+                                                style="flex: 1; overflow-y: auto;">
+                                                <div class="placeholder">Select dark folder to load sessions</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </aside>
+
+                    <!-- Column 3: Histogram & Stacked Preview -->
+                    <section class="col-details"
+                        style="overflow-y: auto; max-height: calc(100vh - 120px); display: flex; flex-direction: column; gap: 15px; padding: 15px;">
+                        <!-- Histogram Card -->
+                        <div class="metadata-card" style="margin: 0; padding: 12px;">
+                            <h3
+                                style="margin-top: 0; margin-bottom: 8px; display: flex; justify-content: space-between;">
+                                <span>Ellipticity Histogram</span>
+                                <span id="sfg-hist-stats"
+                                    style="font-size: 0.75rem; color: var(--text-dim); font-weight: normal;">No
+                                    data</span>
+                            </h3>
+                            <div
+                                style="position: relative; background: rgba(0,0,0,0.4); border: 1px solid var(--glass-border); border-radius: 4px; padding: 10px; height: 160px;">
+                                <canvas id="sfg-histogram-canvas"
+                                    style="width: 100%; height: 100%; display: block;"></canvas>
+                            </div>
+                            <div
+                                style="font-size: 0.7rem; color: var(--text-dim); margin-top: 4px; text-align: center;">
+                                Click histogram to set threshold. Shaded region (≤ threshold) will be stacked.
+                            </div>
+                        </div>
+
+                        <!-- FWHM Histogram Card -->
+                        <div class="metadata-card" style="margin: 0; padding: 12px;">
+                            <h3
+                                style="margin-top: 0; margin-bottom: 8px; display: flex; justify-content: space-between;">
+                                <span>FWHM Histogram</span>
+                                <span id="sfg-fwhm-hist-stats"
+                                    style="font-size: 0.75rem; color: var(--text-dim); font-weight: normal;">No
+                                    data</span>
+                            </h3>
+                            <div
+                                style="position: relative; background: rgba(0,0,0,0.4); border: 1px solid var(--glass-border); border-radius: 4px; padding: 10px; height: 160px;">
+                                <canvas id="sfg-fwhm-histogram-canvas"
+                                    style="width: 100%; height: 100%; display: block;"></canvas>
+                            </div>
+                        </div>
+
+                        <!-- BG Median Histogram Card -->
+                        <div class="metadata-card" style="margin: 0; padding: 12px;">
+                            <h3
+                                style="margin-top: 0; margin-bottom: 8px; display: flex; justify-content: space-between;">
+                                <span>Background Median Histogram</span>
+                                <span id="sfg-bg-hist-stats"
+                                    style="font-size: 0.75rem; color: var(--text-dim); font-weight: normal;">No
+                                    data</span>
+                            </h3>
+                            <div
+                                style="position: relative; background: rgba(0,0,0,0.4); border: 1px solid var(--glass-border); border-radius: 4px; padding: 10px; height: 160px;">
+                                <canvas id="sfg-bg-histogram-canvas"
+                                    style="width: 100%; height: 100%; display: block;"></canvas>
+                            </div>
+                        </div>
+
+                        <!-- Shooting Information Card -->
+                        <div class="preview-card"
+                            style="margin: 0; padding: 12px; flex-grow: 1; display: flex; flex-direction: column;">
+                            <h3 style="margin-top: 0; margin-bottom: 8px;">Information</h3>
+                            <div style="flex-grow: 1; overflow-y: auto;">
+                                <table class="metadata-table-sfg"
+                                    style="width: 100%; border-collapse: collapse; font-size: 0.75rem;">
+                                    <thead>
+                                        <tr style="border-bottom: 1px solid var(--glass-border); text-align: left;">
+                                            <th style="padding: 6px 4px; font-weight: 600; color: var(--text-dim);">
+                                                Items</th>
+                                            <th style="padding: 6px 4px; font-weight: 600; color: var(--text-dim);">
+                                                Stack</th>
+                                            <th style="padding: 6px 4px; font-weight: 600; color: var(--text-dim);">Dark
+                                            </th>
+                                            <th style="padding: 6px 4px; font-weight: 600; color: var(--text-dim);">Flat
+                                            </th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="sfg-shooting-info-body">
+                                        <!-- Dynamically populated -->
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div id="sfg-reports-container" class="hidden"
+                                style="margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--glass-border); font-size: 0.8rem;">
+                                <div style="font-weight: 600; margin-bottom: 4px; color: var(--accent-gold);">Generated
+                                    Session Reports:</div>
+                                <div style="display: flex; gap: 15px;">
+                                    <a href="#" id="sfg-report-md" target="_blank"
+                                        style="color: var(--accent-blue); text-decoration: none;">📄 Markdown Report</a>
+                                    <a href="#" id="sfg-report-html" target="_blank"
+                                        style="color: var(--accent-blue); text-decoration: none;">🌐 HTML Report</a>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+                </div>
+            </div>
+
+            <!-- SYNC TAB -->
+            <div id="sync-tab" class="tab-panel">
+                <div class="shutter-layout">
+                    <section class="control-panel">
+                        <form id="sync-flow-form" onsubmit="return false;">
+                            <!-- Flow Settings -->
+                            <div class="card">
+                                <h2>Flow Settings</h2>
+                                <div class="form-grid">
+                                    <div class="form-group">
+                                        <label for="sync-exposure">Exposure (sec)</label>
+                                        <input type="number" id="sync-exposure" name="exposure" value="5.0" step="0.1">
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="sync-mode">Mode</label>
+                                        <select id="sync-mode" name="mode">
+                                            <option value="bulb">Bulb</option>
+                                            <option value="camera">Camera</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="sync-session">Session ID</label>
+                                        <input type="text" id="sync-session" name="session" value="sync">
+                                    </div>
+                                    <div class="form-group full-width">
+                                        <label for="sync-flow-type">Flow Type</label>
+                                        <select id="sync-flow-type" name="flow_type">
+                                            <option value="solve">Capture &rarr; Solve</option>
+                                            <option value="full">Capture &rarr; Solve &rarr; Sync</option>
+                                            <option value="sync">Solve &rarr; Sync (No Capture)</option>
+                                            <option value="solve_only">Solve Only (No Capture/Sync)</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group full-width">
+                                        <label for="sync-save-dir">Save Directory</label>
+                                        <div class="input-with-button">
+                                            <input type="text" id="sync-save-dir" name="save_dir" placeholder="~/Pictures/sync">
+                                            <button type="button" id="browse-sync-dir-btn" class="btn-small">Browse</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="actions">
+                                <button type="button" id="sync-flow-start-btn" class="btn-primary">START SYNC FLOW</button>
+                                <button type="button" id="sync-flow-stop-btn" class="btn-danger" disabled>ABORT</button>
+                            </div>
+                        </form>
+
+                        <!-- Solve Result & Manual Sync -->
+                        <div class="card" style="margin-top: 1.5rem;">
+                            <h2>Solve Result & Manual Sync</h2>
+                            
+                            <!-- Display solved metadata -->
+                            <div style="margin-bottom: 1rem; padding: 0.8rem; background: rgba(0,0,0,0.2); border: 1px solid var(--glass-border); border-radius: 8px;">
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; font-size: 0.8rem;">
+                                    <div>Status: <span id="sync-res-status" style="font-weight: 600; color: var(--text-dim);">No data</span></div>
+                                    <div>Confidence: <span id="sync-res-conf" style="font-weight: 600;">N/A</span></div>
+                                    <div>Matched Stars: <span id="sync-res-stars" style="font-weight: 600;">N/A</span></div>
+                                    <div>Solve Time: <span id="sync-res-time" style="font-weight: 600;">N/A</span></div>
+                                </div>
+                                <div style="margin-top: 0.5rem; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 0.5rem; font-size: 0.75rem; font-family: monospace;">
+                                    Solved Position:<br>
+                                    RA: <span id="sync-res-ra-hms" style="color: var(--accent-gold);">N/A</span><br>
+                                    Dec: <span id="sync-res-dec-dms" style="color: var(--accent-gold);">N/A</span>
+                                </div>
+                            </div>
+
+                            <!-- Manual Edit and Sync Form -->
+                            <form id="sync-manual-form" onsubmit="return false;">
+                                <div class="form-grid">
+                                    <div class="form-group">
+                                        <label for="sync-manual-ra">RA (deg)</label>
+                                        <input type="number" id="sync-manual-ra" name="ra" step="0.000001" placeholder="RA (deg)" required>
+                                        <span id="sync-manual-ra-converted" style="font-size: 0.75rem; color: var(--accent-gold); margin-top: 4px; font-family: monospace;">--h--m--s</span>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="sync-manual-dec">DEC (deg)</label>
+                                        <input type="number" id="sync-manual-dec" name="dec" step="0.000001" placeholder="DEC (deg)" required>
+                                        <span id="sync-manual-dec-converted" style="font-size: 0.75rem; color: var(--accent-gold); margin-top: 4px; font-family: monospace;">--°--'--"</span>
+                                    </div>
+                                </div>
+                                <div class="actions" style="margin-top: 1rem;">
+                                    <button type="button" id="sync-manual-btn" class="btn-primary" style="width: 100%;">SYNC TO INDI</button>
+                                </div>
+                            </form>
+                        </div>
+                    </section>
+
+                    <section class="log-panel">
+                        <!-- Telemetry Dashboard -->
+                        <div class="card telemetry-dashboard">
+                            <div class="telemetry-grid">
+                                <!-- INDI Status -->
+                                <div class="telemetry-col">
+                                    <div class="telemetry-section-title">INDI status</div>
+                                    <div class="telemetry-row">
+                                        <span class="telemetry-label">Server</span>
+                                        <span id="sync-tel-indi-server" class="telemetry-val badge disconnected">DISCONNECTED</span>
+                                    </div>
+                                    <div class="telemetry-row">
+                                        <span class="telemetry-label">Mount</span>
+                                        <span id="sync-tel-indi-status" class="telemetry-val status-badge unknown">UNKNOWN</span>
+                                    </div>
+                                </div>
+
+                                <!-- Time -->
+                                <div class="telemetry-col">
+                                    <div class="telemetry-section-title">Time</div>
+                                    <div class="telemetry-row">
+                                        <span class="telemetry-label">Local</span>
+                                        <span id="sync-tel-time-local" class="telemetry-val monospace">--:--:--</span>
+                                    </div>
+                                    <div class="telemetry-row">
+                                        <span class="telemetry-label">UTC</span>
+                                        <span id="sync-tel-time-utc" class="telemetry-val monospace">--:--:--</span>
+                                    </div>
+                                    <div class="telemetry-row">
+                                        <span class="telemetry-label">Source</span>
+                                        <span id="sync-tel-time-source" class="telemetry-val badge">N/A</span>
+                                    </div>
+                                </div>
+
+                                <!-- GPS -->
+                                <div class="telemetry-col">
+                                    <div class="telemetry-section-title">GPS</div>
+                                    <div class="telemetry-row">
+                                        <span class="telemetry-label">Lat / Lon</span>
+                                        <span id="sync-tel-gps-coords" class="telemetry-val monospace">N/A</span>
+                                    </div>
+                                    <div class="telemetry-row">
+                                        <span class="telemetry-label">Elev</span>
+                                        <span id="sync-tel-gps-elev" class="telemetry-val monospace">N/A</span>
+                                    </div>
+                                    <div class="telemetry-row">
+                                        <span class="telemetry-label">GPSD</span>
+                                        <span id="sync-tel-gps-status" class="telemetry-val badge">N/A</span>
+                                    </div>
+                                </div>
+
+                                <!-- Orientation -->
+                                <div class="telemetry-col">
+                                    <div class="telemetry-section-title">Position</div>
+                                    <div class="telemetry-row">
+                                        <span class="telemetry-label">RA / DEC</span>
+                                        <span id="sync-tel-orient-coords" class="telemetry-val monospace">N/A</span>
+                                    </div>
+                                    <div class="telemetry-row">
+                                        <span class="telemetry-label">Pier Side</span>
+                                        <span id="sync-tel-orient-pier" class="telemetry-val status-badge unknown">UNKNOWN</span>
+                                    </div>
+                                </div>
+
+                                <!-- Environment -->
+                                <div class="telemetry-col">
+                                    <div class="telemetry-section-title">Environment</div>
+                                    <div class="telemetry-row">
+                                        <span class="telemetry-label">Temp</span>
+                                        <span id="sync-tel-env-temp" class="telemetry-val monospace">--</span>
+                                    </div>
+                                    <div class="telemetry-row">
+                                        <span class="telemetry-label">Humid</span>
+                                        <span id="sync-tel-env-hum" class="telemetry-val monospace">--</span>
+                                    </div>
+                                    <div class="telemetry-row">
+                                        <span class="telemetry-label">Press</span>
+                                        <span id="sync-tel-env-press" class="telemetry-val monospace">--</span>
+                                    </div>
+                                    <div class="telemetry-row">
+                                        <span class="telemetry-label">Dew P</span>
+                                        <span id="sync-tel-env-dew" class="telemetry-val monospace">--</span>
+                                    </div>
+                                    <div class="telemetry-row">
+                                        <span class="telemetry-label">CPU(M)</span>
+                                        <span id="sync-tel-env-cpu-m" class="telemetry-val monospace">--</span>
+                                    </div>
+                                    <div class="telemetry-row">
+                                        <span class="telemetry-label">CPU(R)</span>
+                                        <span id="sync-tel-env-cpu-r" class="telemetry-val monospace">--</span>
+                                    </div>
+                                </div>
+
+                                <!-- FlashAir -->
+                                <div class="telemetry-col">
+                                    <div class="telemetry-section-title">FlashAir</div>
+                                    <div class="telemetry-row">
+                                        <span class="telemetry-label">Status</span>
+                                        <span id="sync-tel-flashair-status" class="telemetry-val badge disconnected">DISCONNECTED</span>
+                                    </div>
+                                    <div class="telemetry-row">
+                                        <span class="telemetry-label">URL</span>
+                                        <span id="sync-tel-flashair-url-container" class="telemetry-val monospace">
+                                            <a id="sync-tel-flashair-url" target="_blank" class="telemetry-link">-</a>
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Live Status -->
+                        <div class="status-dashboard card">
+                            <div class="dashboard-header">
+                                <h3>Live Status</h3>
+                                <span id="sync-stat-label" class="badge idle">IDLE</span>
+                            </div>
+                            <div class="dashboard-grid">
+                                <div class="stat-item" style="grid-column: span 3;">
+                                    <span class="stat-label">CURRENT TASK</span>
+                                    <span id="sync-stat-task" class="stat-value">Idle</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Console -->
+                        <div class="terminal-header">
+                            <span>LIVE SYNC CONSOLE</span>
+                            <button type="button" id="clear-sync-log">Clear</button>
+                        </div>
+                        <div id="sync-terminal" class="terminal-body">
+                            <div class="log-line system">Waiting for flow start...</div>
+                        </div>
+                    </section>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Folder Picker Modal -->
+    <div id="folder-picker-modal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Select Directory</h3>
+                <button type="button" id="close-picker-btn" class="close-btn">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="path-nav">
+                    <button type="button" id="picker-up-btn" class="btn-small">UP</button>
+                    <div id="picker-current-path" class="current-path">~</div>
+                </div>
+                <div id="picker-list" class="folder-list"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" id="confirm-picker-btn" class="btn-primary">Select This Folder</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- SSE Console Modal -->
+    <div id="sse-console-modal" class="modal hidden">
+        <div class="modal-content" style="max-width: 800px; width: 95%; height: 80vh;">
+            <div class="modal-header">
+                <h3>SkySolverEngine (SSE) Console</h3>
+                <button type="button" id="close-sse-modal-btn" class="close-btn">&times;</button>
+            </div>
+            <div class="modal-body"
+                style="display: flex; flex-direction: column; height: calc(100% - 130px); padding: 0;">
+                <div id="sse-terminal" class="terminal-body"
+                    style="flex-grow: 1; border-radius: 0; border: none; font-size: 0.75rem;">
+                    <div class="log-line system">Waiting for SSE run...</div>
+                </div>
+            </div>
+            <div class="modal-footer"
+                style="padding: 1rem; border-top: 1px solid var(--glass-border); display: flex; justify-content: space-between; align-items: center;">
+                <span id="sse-modal-status" style="font-size: 0.8rem; color: var(--accent-gold);">Idle</span>
+                <button type="button" id="sse-modal-close-btn" class="btn-small">Close Window</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Starflux Console Modal -->
+    <div id="sf-console-modal" class="modal hidden">
+        <div class="modal-content" style="max-width: 800px; width: 95%; height: 80vh;">
+            <div class="modal-header">
+                <h3>Starflux Console</h3>
+                <button type="button" id="close-sf-modal-btn" class="close-btn">&times;</button>
+            </div>
+            <div class="modal-body"
+                style="display: flex; flex-direction: column; height: calc(100% - 130px); padding: 0;">
+                <div id="sf-terminal" class="terminal-body"
+                    style="flex-grow: 1; border-radius: 0; border: none; font-size: 0.75rem;">
+                    <div class="log-line system">Waiting for Starflux run...</div>
+                </div>
+            </div>
+            <div class="modal-footer"
+                style="padding: 1rem; border-top: 1px solid var(--glass-border); display: flex; justify-content: space-between; align-items: center;">
+                <span id="sf-modal-status" style="font-size: 0.8rem; color: var(--accent-gold);">Idle</span>
+                <button type="button" id="sf-modal-close-btn" class="btn-small">Close Window</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Starforge Console Modal -->
+    <div id="sfg-console-modal" class="modal hidden">
+        <div class="modal-content" style="max-width: 800px; width: 95%; height: 80vh;">
+            <div class="modal-header">
+                <h3>StarForge Stacker Console</h3>
+                <button type="button" id="close-sfg-modal-btn" class="close-btn">&times;</button>
+            </div>
+            <div class="modal-body"
+                style="display: flex; flex-direction: column; height: calc(100% - 130px); padding: 0;">
+                <div id="sfg-terminal" class="terminal-body"
+                    style="flex-grow: 1; border-radius: 0; border: none; font-size: 0.75rem;">
+                    <div class="log-line system">Waiting for StarForge stack...</div>
+                </div>
+            </div>
+            <div class="modal-footer"
+                style="padding: 1rem; border-top: 1px solid var(--glass-border); display: flex; justify-content: space-between; align-items: center;">
+                <span id="sfg-modal-status" style="font-size: 0.8rem; color: var(--accent-gold);">Idle</span>
+                <button type="button" id="sfg-modal-close-btn" class="btn-small">Close Window</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Image Zoom Modal -->
+    <div id="image-modal" class="modal hidden">
+        <div id="image-modal-overlay" class="modal-overlay"></div>
+        <div class="image-modal-content">
+            <img id="enlarged-image" src="">
+            <button type="button" id="close-image-modal" class="close-btn-float">&times;</button>
+        </div>
+    </div>
+
+    <script src="script.js?v=1.1"></script>
+</body>
+
+</html>

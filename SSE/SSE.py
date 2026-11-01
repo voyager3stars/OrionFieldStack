@@ -1,0 +1,446 @@
+#!/usr/bin/env python3
+# =================================================================
+# Project:      OrionFieldStack
+# Component:    SkySolverEngine (SSE)
+# Version:      2.1.0
+# Author:       OrionFieldStack Dev Team
+# Description:  
+#   v2.0.2:
+#   - latestモードでの「指紋照合（ファイル名一致チェック）」を実装。
+#   - ポスト処理中の latest_shot.json 汚染を防止。
+# =================================================================
+
+__version__ = "2.2.7"
+__json_spec__ = "1.6.3"
+
+import os
+import sys
+import json
+import csv
+import subprocess
+import argparse
+import re
+import time
+import datetime
+import rawpy
+import imageio
+import math
+import io
+import tempfile
+import shutil
+
+class SkySolverEngine:
+    def __init__(self, workdir="/tmp/skysolver", all_sky_enabled=False, force_mode=False):
+        self.workdir = workdir
+        self.all_sky_enabled = all_sky_enabled
+        self.force_mode = force_mode
+        if not os.path.exists(self.workdir):
+            os.makedirs(self.workdir)
+
+    def deg_to_hms(self, ra_deg):
+        ra_hours = (ra_deg % 360) / 15.0
+        h = int(ra_hours); m = int((ra_hours - h) * 60); s = int(round((ra_hours - h - m/60) * 3600))
+        if s >= 60: s -= 60; m += 1
+        if m >= 60: m -= 60; h = (h + 1) % 24
+        return f"{h:02d}h{m:02d}m{s:02d}s"
+
+    def deg_to_dms(self, dec_deg):
+        abs_val = abs(dec_deg)
+        d = int(abs_val); m = int((abs_val - d) * 60); s = int(round((abs_val - d - m/60) * 3600))
+        if s >= 60: s -= 60; m += 1
+        if m >= 60: m -= 60; d += 1
+        sign = "+" if dec_deg >= 0 else "-"
+        return f"{sign}{d:02d}°{m:02d}'{s:02d}\""
+
+    def get_star_rating(self, stars):
+        if stars >= 50: return "★★★★★"
+        if stars >= 30: return "★★★★☆"
+        if stars >= 15: return "★★★☆☆"
+        if stars >= 10: return "★★☆☆☆"
+        return "★☆☆☆☆"
+
+    def prepare_image(self, image_path):
+        if image_path.lower().endswith(('.dng', '.raw')):
+            tmp_jpg = os.path.join(self.workdir, "solve_input.jpg")
+            try:
+                with rawpy.imread(image_path) as raw:
+                    rgb = raw.postprocess(use_camera_wb=True, half_size=True)
+                    imageio.imsave(tmp_jpg, rgb)
+                return tmp_jpg
+            except Exception as e:
+                print(f"  [Error] Image conversion failed: {e}"); return None
+        return image_path
+
+    def solve(self, image_path, ra_hint=None, dec_hint=None):
+        start_time = time.time()
+        timestamp = datetime.datetime.now().isoformat(timespec='seconds')
+        
+        if ra_hint is None and not self.all_sky_enabled:
+            return {"success": False, "duration": 0.0, "timestamp": timestamp}
+
+        src = self.prepare_image(image_path)
+        if not src: return {"success": False, "duration": 0.0, "timestamp": timestamp}
+
+        base_cmd = ["solve-field", src, "--dir", self.workdir, "--overwrite", "--no-plots",
+                    "--scale-low", "1.0", "--scale-high", "15.0", "--scale-units", "app", "--cpulimit", "20"]
+
+        def try_solve(pass_label, sigma, ds, extra_args, timeout=25):
+            print(f"  [Solve] {pass_label}: (sigma={sigma}, ds={ds})...", end="\r")
+            full_cmd = base_cmd + ["--sigma", str(sigma), "--downsample", str(ds)] + extra_args
+            res_cmd = self._run_solve_cmd(full_cmd, timeout=timeout)
+            if res_cmd["success"]:
+                res_cmd["solve_path"] = pass_label
+                print(f"  [Match] {res_cmd.get('hitmiss', '')} [SUCCESS!]")
+            return res_cmd
+
+        res = {"success": False}
+        hint_args = ["--ra", str(ra_hint), "--dec", str(dec_hint), "--radius", "10.0"] if ra_hint is not None else []
+
+        if hint_args:
+            res = try_solve("Pass 1", sigma=30, ds=4, extra_args=hint_args + ["--objs", "100"], timeout=25)
+            if not res["success"]:
+                res = try_solve("Pass 2", sigma=15, ds=4, extra_args=hint_args + ["--objs", "150"], timeout=25)
+            if not res["success"]:
+                res = try_solve("Pass 3", sigma=10, ds=4, extra_args=hint_args + ["--objs", "300"], timeout=30)
+            if not res["success"]:
+                res = try_solve("Pass 4", sigma=5, ds=4, extra_args=hint_args + ["--objs", "500"], timeout=30)
+
+        if not res["success"] and self.all_sky_enabled:
+            res = try_solve("AllSky 1", sigma=30, ds=4, extra_args=["--objs", "100"], timeout=45)
+            if not res["success"]:
+                res = try_solve("AllSky 2", sigma=15, ds=4, extra_args=["--objs", "150"], timeout=45)
+            if not res["success"]:
+                res = try_solve("AllSky 3", sigma=10, ds=4, extra_args=["--objs", "300"], timeout=60)
+            if not res["success"]:
+                res = try_solve("AllSky 4", sigma=5, ds=4, extra_args=["--objs", "500"], timeout=60)
+
+        res["duration"] = round(time.time() - start_time, 2)
+        res["timestamp"] = timestamp
+        res["sse_version"] = __version__
+        return res
+
+    def _run_solve_cmd(self, cmd, timeout):
+        try:
+            res = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+            if "Field 1: solved" in res.stdout:
+                m_coord = re.search(r"Field center: \(RA,Dec\) = \(([\d\.-]+), ([\d\.-]+)\) deg", res.stdout)
+                m_orient = re.search(r"Field rotation angle: up is ([\d\.-]+) degrees", res.stdout)
+                m_stars = re.search(r"found (\d+) sources", res.stdout)
+                m_conf = re.search(r"log-odds ratio ([\d\.]+)", res.stdout)
+                m_hm = re.search(r"Hit/miss: ([\+\-]+)", res.stdout)
+                
+                return {
+                    "success": True, 
+                    "ra": float(m_coord.group(1)) if m_coord else 0.0, 
+                    "dec": float(m_coord.group(2)) if m_coord else 0.0,
+                    "orientation": float(m_orient.group(1)) if m_orient else None,
+                    "stars": int(m_stars.group(1)) if m_stars else None,
+                    "confidence": float(m_conf.group(1)) if m_conf else 0.0,
+                    "hitmiss": m_hm.group(1)[:15] if m_hm else "" 
+                }
+            return {"success": False}
+        except Exception: return {"success": False}
+
+    def print_dashboard(self, res, ra_hint, dec_hint):
+        print(f"\n-----------------[ ANALYSIS REPORT ]-----------------")
+        status_str = "SUCCESS" if res["success"] else "FAILED"
+        print(f" Result: {status_str} ({res.get('solve_path', 'N/A')}) / Time: {res.get('duration')}s")
+        
+        if res["success"]:
+            stars = res.get('stars', 0)
+            print(f" Confidence: {res.get('confidence', 0.0):.2f} (log-odds)")
+            print(f" Stars: [ {self.get_star_rating(stars)} ] {stars} matched")
+            print(f"-----------------------------------------------------")
+            print(f" Position: RA {self.deg_to_hms(res['ra'])} / Dec {self.deg_to_dms(res['dec'])}")
+            print(f" Rotation: {res.get('orientation', 0.0):.2f}° (E of N)")
+            
+            if ra_hint is not None:
+                dra = res['ra'] - ra_hint
+                ddec = res['dec'] - dec_hint
+                dist = math.sqrt((dra * math.cos(math.radians(dec_hint)))**2 + ddec**2) * 60
+                print(f"-----------------------------------------------------")
+                print(f" Mount Drift (Offset):")
+                print(f"  ΔRA: {dra:+.3f}° / ΔDec: {ddec:+.3f}°")
+                print(f"  Total Dist: {dist:.1f}' {'[ Excellent ]' if dist < 5 else '[ Need Sync ]'}")
+        print(f"-----------------------------------------------------\n")
+
+    def update_logs(self, img_path, res):
+        img_dir = os.path.dirname(os.path.abspath(img_path))
+        img_name = os.path.basename(img_path)
+        h_path = os.path.join(img_dir, "shutter_log.json")
+        if os.path.exists(h_path): self._update_json_file(h_path, img_name, res)
+        csv_path = os.path.join(img_dir, "shutter_log.csv")
+        if os.path.exists(csv_path): self._update_csv_file(csv_path, img_name, res)
+
+    def _update_json_file(self, filepath, target_filename, res):
+        temp_fd, temp_path = tempfile.mkstemp(dir=os.path.dirname(filepath), prefix="sse_tmp_", suffix=".json")
+        try:
+            updated = False
+            with open(filepath, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                for entry in data:
+                    # check if name matches or is part of target
+                    name = entry.get("record", {}).get("file", {}).get("name", "")
+                    if name and (name == target_filename or name in target_filename):
+                        self._apply_res_to_dict(entry, res)
+                        updated = True
+            
+            if updated:
+                with os.fdopen(temp_fd, 'w', encoding='utf-8') as tmp:
+                    json.dump(data, tmp, indent=4, ensure_ascii=False)
+                os.replace(temp_path, filepath)
+            else:
+                os.close(temp_fd)
+                if os.path.exists(temp_path): os.remove(temp_path)
+        except Exception as e:
+            if 'temp_path' in locals() and os.path.exists(temp_path): 
+                try: os.close(temp_fd)
+                except: pass
+                os.remove(temp_path)
+            print(f"  [Warning] JSON Update Failed: {e}")
+
+    def _apply_res_to_dict(self, target_dict, res):
+        target_dict.setdefault("analysis", {})
+        sse_data = {
+            "solve_status": "success" if res["success"] else "failed",
+            "solve_path": res.get("solve_path", "N/A"),
+            "sse_version": __version__,
+            "timestamp": res.get("timestamp", ""),
+            "confidence": res.get("confidence", 0.0)
+        }
+        if res["success"]:
+            sse_data["solved_coords"] = {
+                "ra_deg": res["ra"], "dec_deg": res["dec"], "orientation": res.get("orientation"),
+                "ra_hms": self.deg_to_hms(res["ra"]), "dec_dms": self.deg_to_dms(res["dec"])
+            }
+            sse_data["process_stats"] = {
+                "matched_stars": res.get("stars"),
+                "solve_duration_sec": res.get("duration", 0.0)
+            }
+        target_dict["analysis"]["SSE"] = sse_data
+
+    def _update_csv_file(self, filepath, target_filename, res):
+        """Streaming update for CSV with forced v1.6.3 layout."""
+        temp_fd, temp_path = tempfile.mkstemp(dir=os.path.dirname(filepath), prefix="sse_tmp_", suffix=".csv")
+        try:
+            seen_comments = set()
+            master_header = [
+                "JSON_ver", "Session_ID", "Objective", "Telescope", "Opt", "Filter", 
+                "Camera", "Aperture", "Focal_L", "F_num", "Pixel_Size", "Pixel_Scale",
+                "LocalTime", "UTC_Time", "UTC_Offset", "LST", "UnixTime", "Sf_Exp_t", 
+                "Diff Sf-Exif", "Mode", "Type", "Filename", "SavedDir", "Format", 
+                "FileSize", "Width", "Height", "ISO_Exif", "Exposure_Exif", 
+                "DateTime_Exif", "Model", "Lat_Exif", "Lon_Exif", "Alt_Exif",
+                "RA", "DEC", "RA_HMS", "DEC_DMS", "MT_Status", "Side", "HourAngle",
+                "Site_Name", "Lat_INDI", "Lon_INDI", "Alt_INDI", "TZ_Source",
+                "Temp_Ext_C", "Humidity_pct", "Pressure_hPa", "DewPoint_C", 
+                "Mnt_CPU_Temp_C", "RPi_CPU_Temp_C", "SSE_Version", "Solve_Status", 
+                "Solve_Path", "Solve_Confidence", "Solve_Timestamp", "Solve_RA", 
+                "Solve_DEC", "Solve_Orientation", "Solve_RA_hms", "Solve_DEC_dms", 
+                "Matched_Stars", "Solve_Time_sec", "SF_version", "SF_status", 
+                "SF_timestamp", "bg_image_path", "bg_image_name", "SF_stars", "SF_fwhm_med", "SF_fwhm_mean", 
+                "SF_fwhm_std", "SF_ell_med", "SF_ell_mean", "SF_ell_std", "SF_bg_median", "SF_bg_mad"
+            ]
+            
+            # Legacy column mapping for older CSVs
+            legacy_map = {
+                "ISO_Timestamp": "LocalTime",
+                "Timestamp_UTC": "UTC_Time",
+                "Actual_Exp_sec": "Sf_Exp_t",
+                "Exp_Diff_sec": "Diff Sf-Exif",
+                "Shot_Mode": "Mode",
+                "Frame_Type": "Type",
+                "File_Name": "Filename",
+                "ISO": "ISO_Exif",
+                "Shutter_sec": "Exposure_Exif",
+                "RA_deg": "RA",
+                "Dec_deg": "DEC",
+                "Mount_Status": "MT_Status",
+                "Side_Of_Pier": "Side",
+                "LST_HMS": "LST"
+            }
+            
+            with open(filepath, 'r', encoding='utf-8-sig', newline='') as f_in, \
+                 os.fdopen(temp_fd, 'w', encoding='utf-8-sig', newline='') as f_out:
+                
+                header_line = None
+                while True:
+                    line = f_in.readline()
+                    if not line:
+                        break
+                    if line.strip().startswith("#"):
+                        clean_line = line.strip()
+                        if clean_line not in seen_comments:
+                            f_out.write(line)
+                            seen_comments.add(clean_line)
+                    else:
+                        header_line = line
+                        break
+                
+                if not header_line:
+                    f_out.flush()
+                    os.replace(temp_path, filepath)
+                    return
+
+                reader = csv.DictReader([header_line])
+                actual_reader = csv.DictReader(f_in, fieldnames=reader.fieldnames)
+                
+                writer = csv.DictWriter(f_out, fieldnames=master_header, extrasaction='ignore')
+                writer.writeheader()
+                
+                for row in actual_reader:
+                    new_row = {col: row.get(col, "") for col in master_header}
+                    
+                    # Apply legacy mapping if needed
+                    for old_k, new_k in legacy_map.items():
+                        if old_k in row and not new_row.get(new_k):
+                            new_row[new_k] = row[old_k]
+                            
+                    csv_filename = new_row.get("Filename", "")
+                    
+                    if csv_filename and (csv_filename == target_filename or csv_filename in target_filename):
+                        new_row["Solve_Status"] = "success" if res["success"] else "failed"
+                        new_row["Solve_Path"] = res.get("solve_path", "N/A")
+                        new_row["Solve_Time_sec"] = str(res.get("duration", 0.0))
+                        new_row["Solve_Confidence"] = f"{res.get('confidence', 0.0):.2f}"
+                        new_row["SSE_Version"] = __version__
+                        new_row["Solve_Timestamp"] = res.get("timestamp", "")
+                        if res["success"]:
+                            new_row["Solve_RA"] = f"{res['ra']:.8f}"
+                            new_row["Solve_DEC"] = f"{res['dec']:.8f}"
+                            new_row["Solve_RA_hms"] = self.deg_to_hms(res['ra'])
+                            new_row["Solve_DEC_dms"] = self.deg_to_dms(res['dec'])
+                            new_row["Matched_Stars"] = str(res.get("stars", ""))
+                            orient = res.get("orientation")
+                            new_row["Solve_Orientation"] = f"{orient:.2f}" if orient is not None else "0.00"
+                    
+                    writer.writerow(new_row)
+            
+            os.replace(temp_path, filepath)
+        except Exception as e:
+            if 'temp_path' in locals() and os.path.exists(temp_path):
+                try: os.close(temp_fd)
+                except: pass
+                os.remove(temp_path)
+            print(f"  [Error] CSV Update Failed: {e}")
+
+    def process_target(self, target_path):
+        target_name = os.path.basename(target_path)
+        log_path = os.path.join(os.path.dirname(target_path), "shutter_log.json")
+        ra_hint, dec_hint, is_solved = None, None, False
+        if os.path.exists(log_path):
+            try:
+                with open(log_path, 'r', encoding='utf-8') as f:
+                    for r in json.load(f):
+                        if r["record"]["file"]["name"] in target_name:
+                            analysis = r.get("analysis", {})
+                            is_solved = analysis.get("SSE", {}).get("solve_status") == "success" or analysis.get("solve_status") == "success"
+                            ra_hint = r["record"]["mount"].get("ra_deg")
+                            dec_hint = r["record"]["mount"].get("dec_deg"); break
+            except: pass
+        if is_solved and not self.force_mode:
+            print(f"SSE>> Processing [{target_name}]\n  [Skip] Already solved.")
+            return
+        print(f"SSE>> Processing [{target_name}]{' (RE-SOLVE)' if is_solved else ''}")
+        res = self.solve(target_path, ra_hint, dec_hint)
+        self.print_dashboard(res, ra_hint, dec_hint)
+        self.update_logs(target_path, res)
+
+    def process_latest(self, image_dir):
+        """latest_shot.json を指紋照合しながら更新する"""
+        latest_json = os.path.join(image_dir, "latest_shot.json")
+        if not os.path.exists(latest_json):
+            print(f"SSE>> [Error] {latest_json} not found."); return
+
+        # 1. 開始時の指紋取得
+        try:
+            with open(latest_json, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                if isinstance(data, list):
+                    if not data:
+                        print("SSE>> [Error] latest_shot.json list is empty."); return
+                    record_root = data[0]
+                elif isinstance(data, dict):
+                    record_root = data
+                else:
+                    print("SSE>> [Error] Unsupported JSON structure."); return
+                
+                target_filename = record_root["record"]["file"]["name"]
+                target_path = os.path.join(image_dir, target_filename)
+                ra_hint = record_root["record"]["mount"].get("ra_deg")
+                dec_hint = record_root["record"]["mount"].get("dec_deg")
+        except Exception as e:
+            print(f"SSE>> [Error] Failed to read fingerprint: {e}"); return
+
+        # 2. 解析実行
+        print(f"SSE>> Processing Latest: [{target_filename}]")
+        res = self.solve(target_path, ra_hint, dec_hint)
+        self.print_dashboard(res, ra_hint, dec_hint)
+
+        # 3. 書き込み直前の照合と更新
+        try:
+            with open(latest_json, 'r+', encoding='utf-8') as f:
+                current_data = json.load(f)
+                if isinstance(current_data, list):
+                    if not current_data:
+                        print("SSE>> [Warning] File content is empty during writing. Skipping update."); return
+                    current_record_root = current_data[0]
+                else:
+                    current_record_root = current_data
+                
+                if current_record_root["record"]["file"]["name"] == target_filename:
+                    print(f"SSE>> Fingerprint match. Updating latest_shot.json.")
+                    self._apply_res_to_dict(current_record_root, res)
+                    f.seek(0)
+                    json.dump(current_data, f, indent=4, ensure_ascii=False)
+                    f.truncate()
+                else:
+                    print(f"SSE>> [Warning] Fingerprint mismatch! Next shot already started. Skipping update.")
+            
+            # メインログ（shutter_log.json / csv）は不一致でも更新しておく
+            self.update_logs(target_path, res)
+        except Exception as e:
+            print(f"SSE>> [Error] Final update failed: {e}")
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('mode', choices=['latest', 'select'])
+    parser.add_argument('target', nargs='?')
+    parser.add_argument('--allsky', action='store_true')
+    parser.add_argument('--force', action='store_true')
+    parser.add_argument('--session', help='Filter by Session ID')
+    args = parser.parse_args()
+    sse = SkySolverEngine(all_sky_enabled=args.allsky, force_mode=args.force)
+
+    try:
+        if args.mode == 'select' and args.target:
+            t = os.path.abspath(os.path.expanduser(args.target))
+            if os.path.isdir(t):
+                allowed_files = None
+                if args.session:
+                    allowed_files = set()
+                    log_path = os.path.join(t, "shutter_log.json")
+                    if os.path.exists(log_path):
+                        try:
+                            with open(log_path, 'r', encoding='utf-8') as f:
+                                for r in json.load(f):
+                                    if r.get("session_id") == args.session:
+                                        name = r.get("record", {}).get("file", {}).get("name")
+                                        if name:
+                                            allowed_files.add(name)
+                        except Exception as e:
+                            print(f"SSE>> [Warning] Failed to read shutter_log.json for session filter: {e}")
+                
+                files = sorted([f for f in os.listdir(t) if f.lower().endswith(('.dng', '.raw'))])
+                for f in files:
+                    if allowed_files is not None and f not in allowed_files:
+                        continue
+                    sse.process_target(os.path.join(t, f))
+            else:
+                sse.process_target(t)
+        elif args.mode == 'latest' and args.target:
+            sse.process_latest(os.path.abspath(os.path.expanduser(args.target)))
+    except KeyboardInterrupt:
+        print("\nSSE>> Interrupted by user. Cleaning up..."); sys.exit(1)
+
+if __name__ == "__main__": main()

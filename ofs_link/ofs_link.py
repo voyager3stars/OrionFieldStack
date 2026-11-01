@@ -1,0 +1,614 @@
+#!/usr/bin/env python3
+import os
+import sys
+import json
+import subprocess
+import argparse
+import time
+import select
+import urllib.request
+import urllib.error
+import math
+from datetime import datetime, timezone
+from timezonefinder import TimezoneFinder
+import pytz
+
+# TimezoneFinderをグローバルに初期化
+tf = TimezoneFinder()
+
+def safe_float(val, round_digits=None):
+    """
+    値を安全に float に変換する。
+    None, NaN, Inf, または変換不能な文字列の場合は None を返す。
+    round_digits が指定されている場合は四捨五入する。
+    """
+    if val is None:
+        return None
+    try:
+        f = float(val)
+        if not math.isfinite(f):
+            return None
+        if round_digits is not None:
+            return round(f, round_digits)
+        return f
+    except (ValueError, TypeError):
+        return None
+
+def parse_sexagesimal(val):
+    """
+    'HH:MM:SS' または 'DD:MM:SS' 形式の文字列を float に変換する
+    """
+    if val is None:
+        return None
+    try:
+        if isinstance(val, (int, float)):
+            f = float(val)
+            return f if math.isfinite(f) else None
+        
+        s = str(val).strip()
+        if s.lower() in ("nan", "inf", "-inf", "+inf"):
+            return None
+            
+        parts = s.split(':')
+        if len(parts) < 2:
+            f = float(s)
+            return f if math.isfinite(f) else None
+        
+        d = float(parts[0])
+        m = float(parts[1])
+        sec = float(parts[2]) if len(parts) > 2 else 0.0
+        
+        if not (math.isfinite(d) and math.isfinite(m) and math.isfinite(sec)):
+            return None
+            
+        sign = -1 if d < 0 or parts[0].startswith('-') else 1
+        res = d + (sign * m / 60.0) + (sign * sec / 3600.0)
+        return res if math.isfinite(res) else None
+    except:
+        return None
+
+def calc_lst(longitude, dt_utc):
+    """
+    経度とUTC時間から地方恒星時(LST)を計算する (decimal hours)
+    """
+    if longitude is None or not math.isfinite(longitude):
+        return None
+    try:
+        timestamp = dt_utc.timestamp()
+        jd = (timestamp / 86400.0) + 2440587.5
+        t = (jd - 2451545.0) / 36525.0
+        gmst = 280.46061837 + 360.98564736629 * (jd - 2451545.0) + 0.000387933 * t**2 - (t**3 / 38710000)
+        gmst = gmst % 360.0
+        lst_deg = (gmst + longitude) % 360.0
+        return lst_deg / 15.0
+    except:
+        return None
+
+def format_ra(ra_deg):
+    """
+    RA (度数, 0 ~ 360) を 'XXhXXmXXs' 形式の文字列に変換する。
+    """
+    if ra_deg is None or not math.isfinite(ra_deg):
+        return None
+    ra_deg = ra_deg % 360.0
+    ra_hours = ra_deg / 15.0
+    
+    total_seconds = round(ra_hours * 3600.0)
+    total_seconds = total_seconds % 86400
+    
+    h = total_seconds // 3600
+    m = (total_seconds % 3600) // 60
+    s = total_seconds % 60
+    
+    return f"{h:02d}h{m:02d}m{s:02d}s"
+
+def format_dec(dec_deg):
+    """
+    DEC (度数, -90 ~ 90) を 'XX°XX'XX"' 形式の文字列に変換する。
+    符号は、正の場合は '+'、負の場合は '-' を明示する。
+    """
+    if dec_deg is None or not math.isfinite(dec_deg):
+        return None
+    dec_deg = max(-90.0, min(90.0, dec_deg))
+    
+    sign = "-" if dec_deg < 0 else "+"
+    abs_dec = abs(dec_deg)
+    
+    total_seconds = round(abs_dec * 3600.0)
+    total_seconds = min(total_seconds, 324000)
+    
+    d = total_seconds // 3600
+    m = (total_seconds % 3600) // 60
+    s = total_seconds % 60
+    
+    return f"{sign}{d:02d}°{m:02d}'{s:02d}\""
+
+def check_flashair(base_url, timeout=3.0):
+    """
+    FlashAirカードへの接続を確認する。
+    /command.cgi?op=100&DIR=/DCIM へのリクエストが成功するかどうかで判定する。
+    """
+    url = f"{base_url}/command.cgi?op=100&DIR=/DCIM"
+    try:
+        req = urllib.request.Request(url)
+        with urllib.request.urlopen(req, timeout=timeout) as response:
+            if response.status == 200:
+                return True
+    except urllib.error.URLError:
+        pass
+    except Exception:
+        pass
+    return False
+
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+SHUTTERPRO_CONFIG_PATH = os.path.abspath(os.path.join(SCRIPT_DIR, "..", "shutterpro03", "config.json"))
+
+# 位置情報の保存先（OFS全体で唯一の保存場所）
+LOCATION_PATH = os.path.expanduser("~/.local/share/ofs/location.json")
+DEFAULT_LOCATION = {
+    "latitude": 34.6493,
+    "longitude": 135.0015,
+    "elevation": 54.0,
+    "source": "default",
+    "updated_at": None
+}
+
+def _write_location_file(data):
+    """location.json をアトミックに書き込む"""
+    os.makedirs(os.path.dirname(LOCATION_PATH), exist_ok=True)
+    tmp_path = LOCATION_PATH + ".tmp"
+    with open(tmp_path, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=4)
+    os.replace(tmp_path, LOCATION_PATH)
+
+def _migrate_legacy_location():
+    """
+    旧形式（shutterpro03/config.json の SYSTEM.LAST_*）から位置情報を移行する。
+    移行できた場合は保存したデータを、できなかった場合は None を返す。
+    """
+    try:
+        if os.path.exists(SHUTTERPRO_CONFIG_PATH):
+            with open(SHUTTERPRO_CONFIG_PATH, "r", encoding="utf-8") as f:
+                system = json.load(f).get("SYSTEM", {})
+            lat = safe_float(system.get("LAST_LATITUDE"))
+            lon = safe_float(system.get("LAST_LONGITUDE"))
+            if lat is not None and lon is not None:
+                elev = safe_float(system.get("LAST_ELEVATION"))
+                return save_location(lat, lon, elev, source="migrated")
+    except Exception:
+        pass
+    return None
+
+def load_location():
+    """
+    保存済みの位置情報を返す。
+    ファイルが無い場合は旧設定から移行を試み、それも無ければデフォルト値を返す。
+    """
+    if os.path.exists(LOCATION_PATH):
+        try:
+            with open(LOCATION_PATH, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            lat = safe_float(data.get("latitude"))
+            lon = safe_float(data.get("longitude"))
+            if lat is not None and lon is not None:
+                elev = safe_float(data.get("elevation"))
+                return {
+                    "latitude": lat,
+                    "longitude": lon,
+                    "elevation": elev if elev is not None else DEFAULT_LOCATION["elevation"],
+                    "source": data.get("source", "manual"),
+                    "updated_at": data.get("updated_at")
+                }
+        except Exception:
+            pass
+        return dict(DEFAULT_LOCATION)
+
+    migrated = _migrate_legacy_location()
+    if migrated:
+        return migrated
+    return dict(DEFAULT_LOCATION)
+
+def save_location(lat, lon, elevation=None, source="manual"):
+    """
+    位置情報を保存する。elevation 省略時は既存の値を維持する。
+    """
+    lat = safe_float(lat)
+    lon = safe_float(lon)
+    if lat is None or lon is None or not (-90 <= lat <= 90) or not (-180 <= lon <= 180):
+        raise ValueError(f"Invalid coordinates: lat={lat}, lon={lon}")
+
+    elev = safe_float(elevation)
+    if elev is None and os.path.exists(LOCATION_PATH):
+        try:
+            with open(LOCATION_PATH, "r", encoding="utf-8") as f:
+                elev = safe_float(json.load(f).get("elevation"))
+        except Exception:
+            pass
+    if elev is None:
+        elev = DEFAULT_LOCATION["elevation"]
+
+    data = {
+        "latitude": lat,
+        "longitude": lon,
+        "elevation": elev,
+        "source": source,
+        "updated_at": datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
+    }
+    _write_location_file(data)
+    return data
+
+def load_config(config_path_arg=None):
+    """
+    設定（INDIデバイス名等）の読み込み。優先順位：
+    1. --config で指定されたファイルパス
+    2. ../shutterpro03/config.json
+    ※ 位置情報は config ではなく location.json（load_location）で管理する
+    """
+    config = {
+        "INDI_MOUNT": "LX200 OnStep",
+        "PROP_COORD": "EQUATORIAL_EOD_COORD",
+        "PROP_GEO": "GEOGRAPHIC_COORD",
+        "FLASHAIR_URL": "http://192.168.50.200"
+    }
+    
+    paths_to_try = []
+    if config_path_arg:
+        paths_to_try.append(os.path.abspath(config_path_arg))
+    paths_to_try.append(SHUTTERPRO_CONFIG_PATH)
+    
+    for path in paths_to_try:
+        if os.path.exists(path):
+            try:
+                with open(path, "r", encoding="utf-8") as f:
+                    loaded = json.load(f)
+                    
+                    # shutterpro03 の config.json 構造（SYSTEMキーがある場合）に対応
+                    target_dict = loaded.get("SYSTEM", loaded) if isinstance(loaded, dict) else {}
+                    
+                    for k in config.keys():
+                        if k in target_dict:
+                            config[k] = target_dict[k]
+                break
+            except:
+                pass
+    return config
+
+def get_prop(device, property_name, element_name):
+    """
+    indi_getprop コマンドを呼び出して値を取得する
+    """
+    full_prop = f"{device}.{property_name}.{element_name}"
+    try:
+        result = subprocess.check_output(
+            ["indi_getprop", "-t", "1", full_prop],
+            stderr=subprocess.DEVNULL
+        ).decode().strip()
+        
+        if "=" in result:
+            return result.split("=", 1)[1].strip()
+    except:
+        return None
+    return None
+
+def get_gps_data(timeout=1.5):
+    """
+    gpspipe -w コマンドを呼び出して GPSD から TPV と SKY データを取得する
+    """
+    try:
+        proc = subprocess.Popen(
+            ["gpspipe", "-w"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            text=True
+        )
+        
+        start_time = time.monotonic()
+        tpv_data = None
+        sky_data = None
+        
+        while time.monotonic() - start_time < timeout:
+            if tpv_data and sky_data:
+                break
+                
+            r, _, _ = select.select([proc.stdout], [], [], 0.1)
+            if proc.stdout in r:
+                line = proc.stdout.readline()
+                if not line:
+                    break
+                try:
+                    data = json.loads(line.strip())
+                    if data.get("class") == "TPV":
+                        tpv_data = data
+                    elif data.get("class") == "SKY":
+                        sky_data = data
+                except ValueError:
+                    pass
+        
+        proc.terminate()
+        proc.wait(timeout=0.2)
+        return tpv_data, sky_data
+    except Exception:
+        return None, None
+
+def get_local_timestamp(dt_utc, lat, lon):
+    """
+    経緯度から現地タイムゾーンを特定し、タイムゾーンオフセット付きの現地時間ISO 8601文字列を返す
+    """
+    try:
+        tz_name = tf.timezone_at(lat=lat, lng=lon) or "Asia/Tokyo"
+        tz_obj = pytz.timezone(tz_name)
+        dt_local = dt_utc.astimezone(tz_obj)
+        offset_str = dt_local.strftime('%z')
+        offset_formatted = f"{offset_str[:3]}:{offset_str[3:]}"
+        return dt_local.strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3] + offset_formatted
+    except Exception:
+        try:
+            tz_obj = pytz.timezone("Asia/Tokyo")
+            dt_local = dt_utc.astimezone(tz_obj)
+            return dt_local.strftime('%Y-%m-%dT%H:%M:%S.000+09:00')
+        except Exception:
+            return dt_utc.strftime('%Y-%m-%dT%H:%M:%S.000+00:00')
+
+def main():
+    parser = argparse.ArgumentParser(description="ofs_link: Get telescope mount & GPS telemetry")
+    parser.add_argument("--get", action="store_true", help="Get telemetry data in JSON format")
+    parser.add_argument("--mock", action="store_true", help="Return mock data for testing")
+    parser.add_argument("--config", type=str, help="Path to config.json file")
+    parser.add_argument("--flashair", action="store_true", help="Check FlashAir connection status")
+    parser.add_argument("--get-location", action="store_true", help="Print saved location (location.json) in JSON format")
+    parser.add_argument("--set-location", nargs=2, type=float, metavar=("LAT", "LON"), help="Save location to location.json")
+    parser.add_argument("--elevation", type=float, help="Elevation in meters (used with --set-location)")
+    
+    args = parser.parse_args()
+    
+    if args.set_location:
+        try:
+            saved = save_location(args.set_location[0], args.set_location[1], args.elevation, source="manual")
+            print(json.dumps(saved, indent=2))
+            sys.exit(0)
+        except Exception as e:
+            print(json.dumps({"error": str(e)}), file=sys.stderr)
+            sys.exit(1)
+            
+    if args.get_location:
+        print(json.dumps(load_location(), indent=2))
+        sys.exit(0)
+    
+    if not args.get and not args.flashair:
+        parser.print_help()
+        sys.exit(1)
+        
+    if args.flashair:
+        config = load_config(args.config)
+        base_url = config.get("FLASHAIR_URL", "http://192.168.50.200")
+        if args.mock:
+            result = {
+                "flashair": "CONNECTED",
+                "url": base_url
+            }
+            print(json.dumps(result, indent=2))
+            sys.exit(0)
+        connected = check_flashair(base_url)
+        result = {
+            "flashair": "CONNECTED" if connected else "DISCONNECTED",
+            "url": base_url
+        }
+        print(json.dumps(result, indent=2))
+        sys.exit(0)
+        
+    if args.mock:
+        # モックデータを返却 (要求された項目をすべて含む)
+        mock_data = {
+            "indi_server": "CONNECTED",
+            "status": "TRACKING",
+            "ra_deg": 83.81020833,
+            "dec_deg": -5.38966667,
+            "ra_str": "05h35m14s",
+            "dec_str": "-05°23'23\"",
+            "side_of_pier": "EAST",
+            "latitude": 34.6493,
+            "longitude": 135.0015,
+            "elevation": 54.0,
+            "gpsd_status": "enable",
+            "time_source": "gpsd",
+            "timestamp_utc": "2026-06-21T06:55:01.000Z",
+            "iso_timestamp": "2026-06-21T15:55:01.000+09:00",
+            "temp_c": 25.9,
+            "humidity_pct": 55.6,
+            "pressure_hPa": 1010.0,
+            "dew_point_c": 17.0,
+            "cpu_temp_mount_c": 38.0,
+            "cpu_temp_rpi_c": 45.2,
+            "satellites": [
+                {"PRN": 1, "el": 45, "az": 120, "ss": 42, "used": True},
+                {"PRN": 2, "el": 30, "az": 210, "ss": 35, "used": True},
+                {"PRN": 3, "el": 15, "az": 45, "ss": 20, "used": False}
+            ]
+        }
+        print(json.dumps(mock_data, indent=2))
+        sys.exit(0)
+        
+    # 設定のロード
+    config = load_config(args.config)
+    mount_dev = config["INDI_MOUNT"]
+    prop_coord = config["PROP_COORD"]
+    prop_geo = config["PROP_GEO"]
+    
+    # --- 1. GPSD から位置情報・時間情報の取得 ---
+    gps_tpv, gps_sky = get_gps_data()
+    
+    latitude = None
+    longitude = None
+    elevation = None
+    dt_utc = None
+    gpsd_status = "enable"
+    time_source = "gpsd"
+    
+    if gps_tpv:
+        latitude = safe_float(gps_tpv.get("lat"))
+        longitude = safe_float(gps_tpv.get("lon"))
+        elevation = safe_float(gps_tpv.get("altHAE") or gps_tpv.get("alt") or gps_tpv.get("altMSL"))
+        
+        # GPSDからの時間情報のパース
+        time_str = gps_tpv.get("time")
+        if time_str:
+            try:
+                # 'Z' 終端をオフセット表現に置換してパース
+                dt_utc = datetime.fromisoformat(time_str.replace("Z", "+00:00"))
+            except:
+                pass
+ 
+    # GPSから位置情報が取得できない場合は保存済み位置（location.json）にフォールバック
+    saved_location = None
+    if latitude is None or longitude is None:
+        saved_location = load_location()
+        latitude = saved_location["latitude"]
+        longitude = saved_location["longitude"]
+        gpsd_status = "disable"
+        
+    if elevation is None:
+        if saved_location is None:
+            saved_location = load_location()
+        elevation = saved_location["elevation"]
+        
+    # 時間情報が取得できない場合はシステム現在時間（UTC）を使用
+    if dt_utc is None:
+        dt_utc = datetime.now(timezone.utc)
+        time_source = "system"
+        
+    # 各種タイムスタンプ文字列の構築
+    timestamp_utc = dt_utc.strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3] + "Z"
+    iso_timestamp = get_local_timestamp(dt_utc, latitude, longitude)
+
+    # --- 2. INDI サーバーからマウント情報の取得 ---
+    connect_state = get_prop(mount_dev, "CONNECTION", "CONNECT")
+    
+    ra_raw = get_prop(mount_dev, prop_coord, "RA")
+    dec_raw = get_prop(mount_dev, prop_coord, "DEC")
+    
+    is_connected = False
+    if connect_state == "On":
+        is_connected = True
+    elif ra_raw is not None or dec_raw is not None:
+        is_connected = True
+        
+    # 初期値
+    indi_server = "DISCONNECTED"
+    status = "UNKNOWN"
+    ra_deg = None
+    dec_deg = None
+    pier_side = "UNKNOWN"
+    temp_c = None
+    humidity_pct = None
+    pressure_hPa = None
+    dew_point_c = None
+    cpu_temp_mount_c = None
+    cpu_temp_rpi_c = None
+    
+    # Raspberry Pi CPU温度の取得
+    try:
+        with open("/sys/class/thermal/thermal_zone0/temp", "r") as f:
+            cpu_temp_rpi_c = safe_float(float(f.read().strip()) / 1000.0, 1)
+    except:
+        pass
+    
+    if is_connected:
+        indi_server = "CONNECTED"
+        
+        # ステータス (Busy, Ok, Idle, Alert)
+        state_raw = get_prop(mount_dev, prop_coord, "STATE")
+        if state_raw:
+            state_upper = state_raw.upper()
+            if state_upper == "OK":
+                status = "TRACKING"
+            elif state_upper == "BUSY":
+                status = "SLEWING"
+            elif state_upper == "IDLE":
+                status = "IDLE"
+            elif state_upper == "ALERT":
+                status = "ALERT"
+            else:
+                status = state_upper
+        else:
+            status = "IDLE"
+            
+        # 座標の計算
+        if ra_raw:
+            ra_val = parse_sexagesimal(ra_raw)
+            if ra_val is not None:
+                ra_deg = safe_float(ra_val * 15.0, 8)
+                
+        if dec_raw:
+            dec_val = parse_sexagesimal(dec_raw)
+            if dec_val is not None:
+                dec_deg = safe_float(dec_val, 8)
+                
+        # ピアーサイドの取得
+        pier_side_raw = get_prop(mount_dev, "SIDE_OF_PIER", "PIER_SIDE") or \
+                        get_prop(mount_dev, "TELESCOPE_PIER_SIDE", "PIER_SIDE")
+                        
+        if pier_side_raw:
+            pier_side = pier_side_raw.upper()
+            
+        # ピアーサイドのフォールバック計算 (時角より推測)
+        if pier_side == "UNKNOWN" or not pier_side:
+            if longitude is not None and ra_raw:
+                try:
+                    ra_val = parse_sexagesimal(ra_raw)
+                    if ra_val is not None:
+                        lst_val = calc_lst(longitude, dt_utc)
+                        if lst_val is not None:
+                            ha_val = lst_val - ra_val
+                            if ha_val > 12:
+                                ha_val -= 24
+                            if ha_val < -12:
+                                ha_val += 24
+                            pier_side = "EAST" if ha_val < 0 else "WEST"
+                except:
+                    pass
+
+        # 環境情報の取得 (WEATHER_PARAMETERS)
+        t_raw = get_prop(mount_dev, "WEATHER_PARAMETERS", "WEATHER_TEMPERATURE")
+        temp_c = safe_float(t_raw, 1)
+            
+        h_raw = get_prop(mount_dev, "WEATHER_PARAMETERS", "WEATHER_HUMIDITY")
+        humidity_pct = safe_float(h_raw, 1)
+            
+        p_raw = get_prop(mount_dev, "WEATHER_PARAMETERS", "WEATHER_BAROMETER")
+        pressure_hPa = safe_float(p_raw, 1)
+            
+        d_raw = get_prop(mount_dev, "WEATHER_PARAMETERS", "WEATHER_DEWPOINT")
+        dew_point_c = safe_float(d_raw, 1)
+            
+        c_raw = get_prop(mount_dev, "WEATHER_PARAMETERS", "WEATHER_CPU_TEMPERATURE")
+        cpu_temp_mount_c = safe_float(c_raw, 1)
+
+    # 結果データの組み立て
+    result_data = {
+        "indi_server": indi_server,
+        "status": status,
+        "ra_deg": safe_float(ra_deg, 8),
+        "dec_deg": safe_float(dec_deg, 8),
+        "ra_str": format_ra(ra_deg),
+        "dec_str": format_dec(dec_deg),
+        "side_of_pier": pier_side,
+        "latitude": safe_float(latitude, 6),
+        "longitude": safe_float(longitude, 6),
+        "elevation": safe_float(elevation, 1),
+        "gpsd_status": gpsd_status,
+        "time_source": time_source,
+        "timestamp_utc": timestamp_utc,
+        "iso_timestamp": iso_timestamp,
+        "temp_c": temp_c,
+        "humidity_pct": humidity_pct,
+        "pressure_hPa": pressure_hPa,
+        "dew_point_c": dew_point_c,
+        "cpu_temp_mount_c": cpu_temp_mount_c,
+        "cpu_temp_rpi_c": cpu_temp_rpi_c,
+        "satellites": gps_sky.get("satellites", []) if gps_sky else []
+    }
+    
+    print(json.dumps(result_data, indent=2, allow_nan=False))
+
+if __name__ == "__main__":
+    main()
