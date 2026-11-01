@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>OrionFieldStack Control Panel</title>
-    <link rel="stylesheet" href="style.css?v=1.1">
+    <link rel="stylesheet" href="style.css?v=1.2">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=JetBrains+Mono&display=swap"
         rel="stylesheet">
 </head>
@@ -14,7 +14,7 @@
     <div class="container">
         <header>
             <div class="header-main">
-                <h1>OrionFieldStack <span class="v-tag">v1.5.3</span></h1>
+                <h1>OrionFieldStack <span class="v-tag">v1.5.5</span></h1>
                 <nav class="tabs">
                     <button class="tab-btn active" data-tab="shutter">SHUTTER</button>
                     <button class="tab-btn" data-tab="logdata">LOGDATA</button>
@@ -151,6 +151,74 @@
                                 <button type="button" id="stop-btn" class="btn-danger" disabled>ABORT</button>
                             </div>
                         </form>
+
+                        <!-- Live Shot Preview Card -->
+                        <div class="card preview-card" id="shutter-preview-card">
+                            <div class="preview-header">
+                                <div class="preview-title-wrap">
+                                    <span class="preview-icon">📷</span>
+                                    <span class="preview-title">Shot Preview</span>
+                                </div>
+                                <div class="preview-switch-wrap">
+                                    <span id="shutter-preview-status-text" class="preview-status-badge on">ON</span>
+                                    <label class="toggle-switch" title="Toggle real-time shot preview">
+                                        <input type="checkbox" id="shutter-preview-toggle" checked>
+                                        <span class="toggle-slider"></span>
+                                    </label>
+                                </div>
+                            </div>
+
+                            <!-- Preview Body (when switch is ON) -->
+                            <div id="shutter-preview-body" class="preview-body">
+                                <div id="shutter-preview-container" class="preview-image-container" title="Click to view enlarged image">
+                                    <div id="shutter-preview-placeholder" class="preview-placeholder">
+                                        <div class="placeholder-icon-wrap">
+                                            <span class="placeholder-icon">🔭</span>
+                                        </div>
+                                        <span id="shutter-placeholder-text">Waiting for captured shot...</span>
+                                    </div>
+                                    <img id="shutter-preview-img" class="preview-img hidden" alt="Latest Shot" />
+                                    <div id="shutter-preview-spinner" class="preview-spinner-overlay hidden">
+                                        <div class="preview-spinner"></div>
+                                        <span>Loading preview...</span>
+                                    </div>
+                                    <div id="shutter-preview-zoom-badge" class="preview-zoom-badge hidden">
+                                        🔍 Click to Enlarge
+                                    </div>
+                                </div>
+
+                                <div id="shutter-preview-meta" class="preview-meta hidden">
+                                    <div class="preview-meta-row main-meta">
+                                        <span id="shutter-preview-filename" class="preview-filename monospace">--</span>
+                                        <span id="shutter-preview-type" class="badge">--</span>
+                                    </div>
+                                    <div class="preview-meta-grid">
+                                        <div class="meta-item">
+                                            <span class="meta-label">EXP</span>
+                                            <span id="shutter-preview-exp" class="meta-val">--</span>
+                                        </div>
+                                        <div class="meta-item">
+                                            <span class="meta-label">ISO</span>
+                                            <span id="shutter-preview-iso" class="meta-val">--</span>
+                                        </div>
+                                        <div class="meta-item">
+                                            <span class="meta-label">TARGET</span>
+                                            <span id="shutter-preview-target" class="meta-val">--</span>
+                                        </div>
+                                        <div class="meta-item">
+                                            <span class="meta-label">TIME</span>
+                                            <span id="shutter-preview-time" class="meta-val">--</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Preview Disabled Notice (when switch is OFF) -->
+                            <div id="shutter-preview-disabled" class="preview-disabled-box hidden">
+                                <span class="disabled-icon">💤</span>
+                                <span class="disabled-text">Preview is disabled</span>
+                            </div>
+                        </div>
                     </section>
 
                     <section class="log-panel">
@@ -329,7 +397,7 @@
                                 </div>
                                 <div class="sse-options">
                                     <label class="checkbox-container">
-                                        <input type="checkbox" id="sse-allsky">
+                                        <input type="checkbox" id="sse-allsky" checked>
                                         AllSky
                                     </label>
                                     <label class="checkbox-container">
@@ -864,6 +932,12 @@
                                             <button type="button" id="browse-sync-dir-btn" class="btn-small">Browse</button>
                                         </div>
                                     </div>
+                                    <div class="form-group full-width" style="margin-top: 0.2rem;">
+                                        <label class="checkbox-container" style="font-size: 0.82rem; font-weight: 500; color: var(--text-main); display: inline-flex; align-items: center; gap: 8px;">
+                                            <input type="checkbox" id="sync-allsky" name="allsky" value="true" checked>
+                                            AllSky (Fallback to blind search on hint failure)
+                                        </label>
+                                    </div>
                                 </div>
                             </div>
 
@@ -1146,7 +1220,7 @@
         </div>
     </div>
 
-    <script src="script.js?v=1.1"></script>
+    <script src="script.js?v=1.3"></script>
 </body>
 
 </html>

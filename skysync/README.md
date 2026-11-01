@@ -23,12 +23,10 @@ SkySyncがハブとなり、各コンポーネントを繋いで観測を進行�
     end
 ```
 ## ⚙️ 設定ファイル (config.json)
-システム全体の動作設定は config.json で管理します。
+システム全体の動作設定は `config.json` で管理します。未設定の項目は自動的に OrionFieldStack リポジトリの構造および共通仮想環境（`venv`）を基準に解決されます。
 ```json
 {
     "paths": {
-        "shutter_pro_dir": "~/Python/OrionFieldStack/shutterpro03",
-        "sse_dir": "~/Python/OrionFieldStack/SSE",
         "default_image_dir": "~/Pictures/sync"
     },
     "indi": {
@@ -40,9 +38,13 @@ SkySyncがハブとなり、各コンポーネントを繋いで観測を進行�
         "count": "1",
         "mode": "bulb",
         "exposure": "5"
+    },
+    "sse_defaults": {
+        "allsky": true
     }
 }
 ```
+> **Note**: `paths.shutter_pro_dir` および `paths.sse_dir` は通常指定不要です（未指定時はリポジトリ内の各ディレクトリを自動検出します）。特別な配置にオーバーライドしたい場合のみ相対パスまたは絶対パスで記述してください。
 
 # 🚀 使い方
 ## 1. フル自動モード (Capture + Solve + Sync)
@@ -50,6 +52,12 @@ SkySyncがハブとなり、各コンポーネントを繋いで観測を進行�
 ```Bash
 python3 skysync.py full
 ```
+※AllSky（全天ブラインドサーチ）はデフォルトで **有効（ON）** です。
+ヒント探索のみに限定したい場合は `--no-allsky` を指定します：
+```Bash
+python3 skysync.py full --no-allsky
+```
+
 ## 2. 解析・同期モード (Solve + Sync)
 すでに撮影済みの最新画像（latest_shot.json）を解析し、架台に同期します。
 ```Bash
@@ -70,6 +78,17 @@ python3 skysync.py solve_only
 ```Bash
 python3 skysync.py manual --ra 83.82 --dec -5.39
 ```
+
+### ⚙️ オプション一覧
+| オプション | 既定値 | 説明 |
+|---|---|---|
+| `--allsky` | 有効 (True) | SSE による AllSky（全天ブラインドサーチ）フォールバックを有効化します。 |
+| `--no-allsky` | - | AllSky を無効化し、マウントのヒント座標周辺のみで解析を試行します。 |
+| `--exposure` | config 参照 | 露出時間（秒） |
+| `--count` | config 参照 | 撮影枚数 |
+| `--shutter-mode` | config 参照 | シャッターモード（bulb / camera） |
+| `--dir` | config 参照 | 画像の出力・保存先ディレクトリ |
+| `--session` | config 参照 | セッションID |
 ## 🔍 技術仕様：
 天体位置解析（Astrometry.net）の出力は「度（Degrees）」ですが、多くの架台制御プロトコル（INDI等）では赤経を「時（Hours）」で扱う必要があります。SkySyncは以下の計算により、高精度な同期を実現しています。
 $$RA_{hours} = \frac{RA_{deg}}{15.0}$$
@@ -90,8 +109,18 @@ Note: 浮動小数点は第8位まで精度を保持して計算されます。
 
 ## 📝 更新履歴
 
+* **v2.2.0** (2026-10-31)
+  - **AllSky ブラインドサーチ連携**: SSE 実行時の AllSky 全天探索フォールバックに対応。
+  - デフォルト有効（ON）化、および `--allsky / --no-allsky` CLI オプションと `config.json`（`sse_defaults.allsky`）による制御をサポート。
+
+* **v2.1.2** (2026-10-10)
+  - **リポジトリルート相対パス自動解決**: スクリプト自身の配置場所からリポジトリルート（`OrionFieldStack`）を自動検出し、任意のインストールパスで動作するように改善。
+  - **Python仮想環境解決**: リポジトリ全体の共通仮想環境（`venv`）または実行中の Python インタプリタを優先使用するように更新。
+  - `config.json` へのフォールバック対応および `config.json.sample` の追加。
+
 * **v2.1.1** (2026-06-28)
   - **OrionFieldStack JSON Spec v1.6.3 準拠**: StarFluxの新しい背景解析項目追加に伴うJSON構造の拡張に対応（`analysis.SSE` ノードには影響しないため、従来通り動作することを再確認）。内部バージョンおよびコメント表記を v1.6.3 へ更新。
+
 
 ---
 

@@ -1,0 +1,18 @@
+{
+    "paths": {
+        "default_image_dir": "~/Pictures/sync"
+    },
+    "indi": {
+        "device": "LX200 OnStep"
+    },
+    "shutter_defaults": {
+        "session": "sync",
+        "type": "Sync",
+        "count": "1",
+        "mode": "bulb",
+        "exposure": "5"
+    },
+    "sse_defaults": {
+        "allsky": true
+    }
+}

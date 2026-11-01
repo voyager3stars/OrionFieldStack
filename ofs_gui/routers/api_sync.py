@@ -29,6 +29,9 @@ async def start_sync_flow(request: Request):
         save_dir = form_data.get("save_dir", "~/Pictures/sync")
         session = form_data.get("session", "sync")
         flow_type = form_data.get("flow_type", "solve")
+        allsky_val = form_data.get("allsky")
+        # デフォルトは ON。明示的に false/0/off が渡された場合のみ OFF
+        is_allsky = allsky_val not in ["false", "False", "0", "off"] if allsky_val is not None else True
         
         if flow_type not in ["full", "sync", "solve", "solve_only"]:
             flow_type = "solve"
@@ -42,6 +45,10 @@ async def start_sync_flow(request: Request):
             "--dir", save_dir,
             "--session", session
         ]
+        if is_allsky:
+            cmd.append("--allsky")
+        else:
+            cmd.append("--no-allsky")
 
         try:
             env = os.environ.copy()

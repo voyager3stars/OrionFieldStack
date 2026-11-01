@@ -12,6 +12,9 @@ document.addEventListener('DOMContentLoaded', () => {
             tabPanels.forEach(p => p.classList.remove('active'));
             btn.classList.add('active');
             document.getElementById(`${target}-tab`).classList.add('active');
+            if (target === 'shutter' && typeof fetchShutterLatestPreview === 'function') {
+                fetchShutterLatestPreview();
+            }
         };
     });
 
@@ -129,18 +132,27 @@ document.addEventListener('DOMContentLoaded', () => {
             if (total > 0) progressBar.style.width = `${(current / total) * 100}%`;
             else progressBar.style.width = '100%';
         }
-        if (cleanLine.includes('Downloading:')) {
-            statLabel.textContent = 'DOWNLOADING';
+        if (cleanLine.includes('Downloading:') || cleanLine.includes('[Logged]:')) {
+            statLabel.textContent = cleanLine.includes('[Logged]:') ? 'LOGGING' : 'DOWNLOADING';
             statLabel.className = 'badge waiting';
+            if (typeof fetchShutterLatestPreview === 'function') {
+                fetchShutterLatestPreview();
+            }
         }
         if (cleanLine.includes('Waiting for background tasks')) {
             statLabel.textContent = 'FINISHING';
             statLabel.className = 'badge waiting';
+            if (typeof fetchShutterLatestPreview === 'function') {
+                fetchShutterLatestPreview();
+            }
         }
         if (cleanLine.includes('### Finished Session')) {
             statLabel.textContent = 'IDLE';
             statLabel.className = 'badge idle';
             progressBar.style.width = '100%';
+            if (typeof fetchShutterLatestPreview === 'function') {
+                fetchShutterLatestPreview(true);
+            }
         }
     }
 
@@ -178,11 +190,16 @@ document.addEventListener('DOMContentLoaded', () => {
             connectionStatus.className = 'status-running';
             startBtn.disabled = true;
             stopBtn.disabled = false;
+            if (typeof startPreviewPolling === 'function') startPreviewPolling();
         } else {
             connectionStatus.textContent = 'SYSTEM IDLE';
             connectionStatus.className = 'status-idle';
             startBtn.disabled = false;
             stopBtn.disabled = true;
+            if (typeof stopPreviewPolling === 'function') stopPreviewPolling();
+            if (typeof fetchShutterLatestPreview === 'function') {
+                fetchShutterLatestPreview(true);
+            }
         }
     }
 
@@ -207,6 +224,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
             addTerminalLog('>>> Default configuration loaded.', 'system');
+            if (typeof fetchShutterLatestPreview === 'function') {
+                fetchShutterLatestPreview();
+            }
         } catch (e) { console.error('Failed to load config', e); }
     }
 
@@ -270,6 +290,184 @@ document.addEventListener('DOMContentLoaded', () => {
     clearBtn.onclick = () => { terminal.innerHTML = ''; addTerminalLog('Console cleared.', 'system'); };
 
     // =========================================================================
+    // SHUTTER LIVE PREVIEW LOGIC
+    // =========================================================================
+    const previewToggle = document.getElementById('shutter-preview-toggle');
+    const previewStatusText = document.getElementById('shutter-preview-status-text');
+    const previewBody = document.getElementById('shutter-preview-body');
+    const previewDisabledNotice = document.getElementById('shutter-preview-disabled');
+    const previewContainer = document.getElementById('shutter-preview-container');
+    const previewPlaceholder = document.getElementById('shutter-preview-placeholder');
+    const placeholderText = document.getElementById('shutter-placeholder-text');
+    const previewImg = document.getElementById('shutter-preview-img');
+    const previewSpinner = document.getElementById('shutter-preview-spinner');
+    const previewZoomBadge = document.getElementById('shutter-preview-zoom-badge');
+    const previewMeta = document.getElementById('shutter-preview-meta');
+    const previewFilename = document.getElementById('shutter-preview-filename');
+    const previewType = document.getElementById('shutter-preview-type');
+    const previewExp = document.getElementById('shutter-preview-exp');
+    const previewIso = document.getElementById('shutter-preview-iso');
+    const previewTarget = document.getElementById('shutter-preview-target');
+    const previewTime = document.getElementById('shutter-preview-time');
+
+    let isPreviewEnabled = localStorage.getItem('ofs_shutter_preview_enabled') !== 'false';
+    let currentPreviewIdentifier = '';
+    let previewPollInterval = null;
+
+    function updatePreviewSwitchUI(enabled) {
+        if (previewToggle) previewToggle.checked = enabled;
+        if (previewStatusText) {
+            previewStatusText.textContent = enabled ? 'ON' : 'OFF';
+            previewStatusText.className = `preview-status-badge ${enabled ? 'on' : 'off'}`;
+        }
+        if (previewBody) {
+            if (enabled) previewBody.classList.remove('hidden');
+            else previewBody.classList.add('hidden');
+        }
+        if (previewDisabledNotice) {
+            if (enabled) previewDisabledNotice.classList.add('hidden');
+            else previewDisabledNotice.classList.remove('hidden');
+        }
+    }
+
+    if (previewToggle) {
+        updatePreviewSwitchUI(isPreviewEnabled);
+        previewToggle.addEventListener('change', () => {
+            isPreviewEnabled = previewToggle.checked;
+            localStorage.setItem('ofs_shutter_preview_enabled', isPreviewEnabled ? 'true' : 'false');
+            updatePreviewSwitchUI(isPreviewEnabled);
+            if (isPreviewEnabled) {
+                fetchShutterLatestPreview(true);
+            }
+        });
+    }
+
+    function startPreviewPolling() {
+        if (previewPollInterval) clearInterval(previewPollInterval);
+        if (isPreviewEnabled) {
+            previewPollInterval = setInterval(() => {
+                fetchShutterLatestPreview();
+            }, 4000);
+        }
+    }
+
+    function stopPreviewPolling() {
+        if (previewPollInterval) {
+            clearInterval(previewPollInterval);
+            previewPollInterval = null;
+        }
+    }
+
+    async function fetchShutterLatestPreview(force = false) {
+        if (!isPreviewEnabled) return;
+
+        const saveDirInput = document.getElementById('save_dir');
+        const saveDir = saveDirInput ? saveDirInput.value.trim() : '';
+
+        try {
+            const url = `/api/shutter/preview/latest${saveDir ? `?dir=${encodeURIComponent(saveDir)}` : ''}`;
+            const resp = await fetch(url);
+            if (!resp.ok) return;
+
+            const data = await resp.json();
+            if (!data || !data.has_image) {
+                if (previewPlaceholder) {
+                    previewPlaceholder.classList.remove('hidden');
+                    if (placeholderText) placeholderText.textContent = 'Waiting for captured shot...';
+                }
+                if (previewImg) previewImg.classList.add('hidden');
+                if (previewZoomBadge) previewZoomBadge.classList.add('hidden');
+                if (previewMeta) previewMeta.classList.add('hidden');
+                currentPreviewIdentifier = '';
+                return;
+            }
+
+            const imageIdentifier = `${data.path}_${data.mtime || ''}`;
+            if (!force && currentPreviewIdentifier === imageIdentifier) {
+                return;
+            }
+            currentPreviewIdentifier = imageIdentifier;
+
+            if (previewSpinner) previewSpinner.classList.remove('hidden');
+
+            // 軽量サムネイルURLとキャッシュキー（mtime基準）
+            const thumbBaseUrl = data.thumb_url || data.url;
+            const cacheKey = data.mtime ? `&v=${data.mtime}` : `&t=${Date.now()}`;
+            const finalThumbUrl = `${thumbBaseUrl}${cacheKey}`;
+
+            // モーダル拡大用の高精細URLを保存
+            if (previewImg) {
+                previewImg.dataset.fullUrl = data.url;
+            }
+
+            // 即時プログレッシブ読み込み
+            if (previewImg) {
+                previewImg.onload = () => {
+                    previewImg.classList.remove('hidden');
+                    if (previewPlaceholder) previewPlaceholder.classList.add('hidden');
+                    if (previewZoomBadge) previewZoomBadge.classList.remove('hidden');
+                    if (previewSpinner) previewSpinner.classList.add('hidden');
+                };
+                previewImg.onerror = () => {
+                    if (previewSpinner) previewSpinner.classList.add('hidden');
+                };
+                previewImg.src = finalThumbUrl;
+            }
+
+            if (previewFilename) previewFilename.textContent = data.filename || '--';
+            if (previewType) {
+                const ft = data.frame_type || 'SHOT';
+                previewType.textContent = ft.toUpperCase();
+                previewType.className = `badge ${ft.toLowerCase()}`;
+            }
+            if (previewExp) {
+                previewExp.textContent = data.exposure != null ? `${data.exposure}s` : '--';
+            }
+            if (previewIso) {
+                previewIso.textContent = data.iso != null ? data.iso : '--';
+            }
+            if (previewTarget) {
+                previewTarget.textContent = data.target || '--';
+            }
+            if (previewTime) {
+                if (data.timestamp && data.timestamp.includes(' ')) {
+                    previewTime.textContent = data.timestamp.split(' ')[1];
+                } else {
+                    previewTime.textContent = data.timestamp || '--';
+                }
+            }
+            if (previewMeta) previewMeta.classList.remove('hidden');
+
+        } catch (e) {
+            console.warn('Failed to fetch shutter preview:', e);
+            if (previewSpinner) previewSpinner.classList.add('hidden');
+        }
+    }
+
+    // save_dir input changed
+    const saveDirEl = document.getElementById('save_dir');
+    if (saveDirEl) {
+        saveDirEl.addEventListener('change', () => {
+            if (isPreviewEnabled) fetchShutterLatestPreview(true);
+        });
+    }
+
+    // Preview Container Click: Zoom in modal (use full-resolution image)
+    if (previewContainer) {
+        previewContainer.addEventListener('click', () => {
+            if (previewImg && !previewImg.classList.contains('hidden')) {
+                const zoomUrl = previewImg.dataset.fullUrl || previewImg.src;
+                if (typeof openEnlargedModalImage === 'function' && zoomUrl) {
+                    openEnlargedModalImage(zoomUrl);
+                }
+            }
+        });
+    }
+
+    // Trigger initial preview fetch
+    fetchShutterLatestPreview();
+
+    // =========================================================================
     // LOGDATA TAB LOGIC (INTERACTIVE 3-COLUMN)
     // =========================================================================
     const loadLogsBtn = document.getElementById('load-logs-btn');
@@ -309,12 +507,17 @@ document.addEventListener('DOMContentLoaded', () => {
         updateZoomTransform();
     }
 
+    function openEnlargedModalImage(src) {
+        if (!src) return;
+        enlargedImage.src = src;
+        imageModal.classList.remove('hidden');
+        resetZoomState();
+    }
+
     imgContainer.onclick = () => {
         const img = imgContainer.querySelector('img');
         if (img && img.src) {
-            enlargedImage.src = img.src;
-            imageModal.classList.remove('hidden');
-            resetZoomState();
+            openEnlargedModalImage(img.src);
         }
     };
 
@@ -1092,6 +1295,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const syncFlowForm = document.getElementById('sync-flow-form');
     const syncFlowStartBtn = document.getElementById('sync-flow-start-btn');
     const syncFlowStopBtn = document.getElementById('sync-flow-stop-btn');
+    const syncAllskyCheckbox = document.getElementById('sync-allsky');
     const syncTerminal = document.getElementById('sync-terminal');
     const clearSyncLogBtn = document.getElementById('clear-sync-log');
 
@@ -1302,6 +1506,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     syncFlowStartBtn.onclick = async () => {
         const formData = new FormData(syncFlowForm);
+        if (syncAllskyCheckbox) {
+            formData.set('allsky', syncAllskyCheckbox.checked ? 'true' : 'false');
+        }
         syncStatLabel.textContent = 'RUNNING';
         syncStatLabel.className = 'badge exposing';
         syncStatTask.textContent = 'Starting sync flow...';

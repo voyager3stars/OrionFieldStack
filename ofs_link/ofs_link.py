@@ -441,22 +441,29 @@ def main():
     longitude = None
     elevation = None
     dt_utc = None
-    gpsd_status = "enable"
-    time_source = "gpsd"
+    gpsd_status = "disable"
+    time_source = "system"
     
     if gps_tpv:
-        latitude = safe_float(gps_tpv.get("lat"))
-        longitude = safe_float(gps_tpv.get("lon"))
-        elevation = safe_float(gps_tpv.get("altHAE") or gps_tpv.get("alt") or gps_tpv.get("altMSL"))
-        
-        # GPSDからの時間情報のパース
-        time_str = gps_tpv.get("time")
-        if time_str:
-            try:
-                # 'Z' 終端をオフセット表現に置換してパース
-                dt_utc = datetime.fromisoformat(time_str.replace("Z", "+00:00"))
-            except:
-                pass
+        mode = gps_tpv.get("mode", 0)
+        # GPS Fix (mode >= 2: 2D/3D fix) の場合のみ位置と時間を信頼
+        if mode >= 2:
+            latitude = safe_float(gps_tpv.get("lat"))
+            longitude = safe_float(gps_tpv.get("lon"))
+            elevation = safe_float(gps_tpv.get("altHAE") or gps_tpv.get("alt") or gps_tpv.get("altMSL"))
+            
+            # GPSDからの時間情報のパース
+            time_str = gps_tpv.get("time")
+            if time_str:
+                try:
+                    parsed_dt = datetime.fromisoformat(time_str.replace("Z", "+00:00"))
+                    # 年が過去（2024年以前）の未初期化データでないか確認
+                    if parsed_dt.year >= 2024:
+                        dt_utc = parsed_dt
+                        time_source = "gpsd"
+                        gpsd_status = "enable"
+                except:
+                    pass
  
     # GPSから位置情報が取得できない場合は保存済み位置（location.json）にフォールバック
     saved_location = None
@@ -471,7 +478,7 @@ def main():
             saved_location = load_location()
         elevation = saved_location["elevation"]
         
-    # 時間情報が取得できない場合はシステム現在時間（UTC）を使用
+    # 時間情報が取得できない（またはFixしていない）場合はシステム現在時間（UTC）を使用
     if dt_utc is None:
         dt_utc = datetime.now(timezone.utc)
         time_source = "system"

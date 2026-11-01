@@ -3,32 +3,58 @@
 # Project:      OrionFieldStack
 # Tool:         SkySync v2.1.0 (Core Orchestrator)
 # Description:  
-#   v2.1.1: JSON Spec v1.6.3 準拠のルート並列 analysis.SSE に対応。
-#           latest_shot.json のリスト形式・オブジェクト形式双方に対応。
+#   v2.2.0: SSE の AllSky ブラインドサーチ連携に対応（デフォルト有効、CLIおよびconfig.jsonで切替可能）。
+#   v2.1.2: リポジトリルート基準の相対パス解決に対応。
+#           ルート venv (OrionFieldStack/venv) および sys.executable を優先使用。
 # =================================================================
 
-__version__ = "2.1.1"
+__version__ = "2.2.0"
 __json_spec__ = "1.6.3"
 
 import subprocess
 import argparse
 import os
+import sys
 import json
 import time
 
-CONFIG_FILE = "config.json"
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+OFS_ROOT = os.path.dirname(SCRIPT_DIR)
+CONFIG_FILE = os.path.join(SCRIPT_DIR, "config.json")
 
 class SkySync:
     def __init__(self):
         self.config = self.load_config()
-        self.device = self.config["indi"]["device"]
-        self.shutter_dir = os.path.abspath(os.path.expanduser(self.config["paths"]["shutter_pro_dir"]))
-        self.sse_dir = os.path.abspath(os.path.expanduser(self.config["paths"]["sse_dir"]))
-        self.image_dir = os.path.abspath(os.path.expanduser(self.config["paths"]["default_image_dir"]))
+        self.device = self.config.get("indi", {}).get("device", "LX200 OnStep")
+        self.shutter_dir = self.resolve_tool_dir("shutter_pro_dir", "shutterpro03")
+        self.sse_dir = self.resolve_tool_dir("sse_dir", "SSE")
+        
+        default_img_dir = self.config.get("paths", {}).get("default_image_dir", "~/Pictures/sync")
+        self.image_dir = os.path.abspath(os.path.expanduser(default_img_dir))
         
         # SSE v2.2.x が出力する最新解析結果 JSON (Spec v1.6.3)
         self.latest_json_path = os.path.join(self.image_dir, "latest_shot.json")
-        self.shutter_defaults = self.config["shutter_defaults"]
+        self.shutter_defaults = self.config.get("shutter_defaults", {})
+        self.sse_defaults = self.config.get("sse_defaults", {})
+        self.default_allsky = self.sse_defaults.get("allsky", self.config.get("sse", {}).get("allsky", True))
+
+        # Python実行バイナリの決定: リポジトリ共通venv -> 自身のインタプリタ (sys.executable)
+        root_venv_python = os.path.join(OFS_ROOT, "venv", "bin", "python")
+        if os.path.exists(root_venv_python):
+            self.python_exec = root_venv_python
+        else:
+            self.python_exec = sys.executable
+
+    def resolve_tool_dir(self, key, default_dirname):
+        """ツールディレクトリを解決する（未指定または相対パスの場合は OFS_ROOT 基準）"""
+        configured_path = self.config.get("paths", {}).get(key)
+        if not configured_path:
+            return os.path.join(OFS_ROOT, default_dirname)
+        
+        expanded = os.path.expanduser(configured_path)
+        if os.path.isabs(expanded):
+            return os.path.abspath(expanded)
+        return os.path.abspath(os.path.join(OFS_ROOT, expanded))
 
     def load_config(self):
         if not os.path.exists(CONFIG_FILE):
@@ -38,15 +64,16 @@ class SkySync:
             return json.load(f)
 
     def run_tool(self, tool_dir, script_name, args):
-        """仮想環境のPythonを使って指定したスクリプトを実行する"""
-        venv_python = os.path.join(tool_dir, "venv", "bin", "python")
-        if not os.path.exists(venv_python):
-            venv_python = "python3" # venvがない場合のフォールバック
+        """共通仮想環境または現在のPythonを使って指定したスクリプトを実行する"""
+        script_path = os.path.join(tool_dir, script_name)
+        if not os.path.exists(script_path):
+            print(f"[Error] {script_name} not found at {script_path}")
+            return False
 
-        cmd = [venv_python, os.path.join(tool_dir, script_name)] + args
+        cmd = [self.python_exec, script_path] + args
         print(f"[SkySync] Executing: {' '.join(cmd)}")
         try:
-            subprocess.run(cmd, check=True)
+            subprocess.run(cmd, check=True, cwd=tool_dir)
             return True
         except subprocess.CalledProcessError as e:
             print(f"[Error] {script_name} failed: {e}")
@@ -147,6 +174,8 @@ def main():
     parser.add_argument('--shutter-mode', choices=['camera', 'bulb'], help='Shutter mode for shutterpro03')
     parser.add_argument('--dir', type=str, help='Output directory for images')
     parser.add_argument('--session', type=str, help='Session ID for shutterpro03')
+    parser.add_argument('--allsky', dest='allsky', action='store_true', default=None, help='Enable AllSky blind solve in SSE (Default: True)')
+    parser.add_argument('--no-allsky', dest='allsky', action='store_false', help='Disable AllSky blind solve in SSE')
     args, extra_args = parser.parse_known_args()
 
     ss = SkySync()
@@ -157,6 +186,7 @@ def main():
         shutter_mode = args.shutter_mode if args.shutter_mode is not None else ss.shutter_defaults["mode"]
         image_dir = os.path.abspath(os.path.expanduser(args.dir)) if args.dir is not None else ss.image_dir
         session = args.session if args.session is not None else ss.shutter_defaults["session"]
+        is_allsky = args.allsky if args.allsky is not None else ss.default_allsky
 
         if args.mode in ["full", "solve"]:
             # 1. 撮影実行 (shutterpro03.py)
@@ -169,7 +199,11 @@ def main():
             if not ss.run_tool(ss.shutter_dir, "shutterpro03.py", sh_args): return
 
         # 2. 解析実行 (SSE.py)
-        if ss.run_tool(ss.sse_dir, "SSE.py", ["latest", image_dir]):
+        sse_args = ["latest", image_dir]
+        if is_allsky:
+            sse_args.append("--allsky")
+
+        if ss.run_tool(ss.sse_dir, "SSE.py", sse_args):
             # 3. 解析済み JSON を読み込んで INDI 同期
             ra, dec = ss.load_latest_coords(image_dir)
             if args.mode not in ["solve", "solve_only"]:
